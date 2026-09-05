@@ -46,7 +46,7 @@ export const AGENTS: Record<AgentRole, AgentDefinition> = {
     ],
     tools: ["analyze_requirements", "create_task", "assign_agent", "check_status"],
     color: "#8b5cf6",
-    model: "gpt-4.1",
+    model: "gpt-4.5-turbo",
   },
   architect: {
     role: "architect",
@@ -64,7 +64,7 @@ export const AGENTS: Record<AgentRole, AgentDefinition> = {
     ],
     tools: ["define_architecture", "create_file", "create_api_contract"],
     color: "#06b6d4",
-    model: "gpt-4.1",
+    model: "gpt-4.5-turbo",
   },
   database: {
     role: "database",
@@ -82,7 +82,7 @@ export const AGENTS: Record<AgentRole, AgentDefinition> = {
     ],
     tools: ["create_table", "run_migration", "seed_table", "create_file"],
     color: "#10b981",
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
   },
   backend: {
     role: "backend",
@@ -100,7 +100,7 @@ export const AGENTS: Record<AgentRole, AgentDefinition> = {
     ],
     tools: ["create_file", "set_env_var", "run_command"],
     color: "#f59e0b",
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
   },
   frontend: {
     role: "frontend",
@@ -118,46 +118,47 @@ export const AGENTS: Record<AgentRole, AgentDefinition> = {
     ],
     tools: ["create_file", "create_component", "run_command"],
     color: "#ec4899",
-    model: "gpt-4.1-mini",
+    model: "gpt-4o",
   },
   testing: {
     role: "testing",
-    name: "QA & Testing",
+    name: "Testing",
     emoji: "🧪",
-    tagline: "Writes tests and gates the pipeline",
+    tagline: "Writes unit tests, integration suites and reports",
     description:
-      "Produces unit and integration tests for every endpoint and entity, executes the suite and reports coverage.",
+      "Drafts validation assertions, mock route handlers, and end-to-end integration flows using Vitest and Playwright.",
     capabilities: [
-      "Unit tests",
-      "API integration tests",
-      "Coverage reporting",
-      "Regression detection",
-      "Lint & typecheck",
+      "Unit testing",
+      "API mocking",
+      "E2E simulation",
+      "Coverage analysis",
+      "Type checking",
     ],
-    tools: ["create_file", "run_command", "report_coverage"],
-    color: "#84cc16",
-    model: "gpt-4.1-mini",
+    tools: ["create_file", "run_command", "analyze_coverage"],
+    color: "#f43f5e",
+    model: "gpt-4o-mini",
   },
   devops: {
     role: "devops",
     name: "DevOps",
     emoji: "🚀",
-    tagline: "Containers, CI and one-click deploys",
+    tagline: "Containerises software and automates deployments",
     description:
-      "Writes the Dockerfile, compose stack and CI workflow, then builds the image and deploys behind a human approval gate.",
+      "Writes multi-stage Dockerfiles, Docker Compose stacks, and continuous integration pipelines for deployment.",
     capabilities: [
       "Containerisation",
-      "CI/CD pipelines",
-      "Secrets management",
-      "Health checks",
-      "Deployment",
+      "CI/CD workflow",
+      "Orchestration",
+      "Resource allocation",
+      "Security scanning",
     ],
-    tools: ["create_file", "run_command", "request_approval", "deploy"],
+    tools: ["create_file", "run_command", "audit_image"],
     color: "#f97316",
-    model: "gpt-4.1-mini",
+    model: "gpt-4o",
   },
 };
 
-export function agentMeta(role: string | null | undefined): AgentDefinition {
-  return AGENTS[(role as AgentRole) ?? "orchestrator"] ?? AGENTS.orchestrator;
+export function agentMeta(role: string | null) {
+  if (!role) return { name: "System", emoji: "👤", color: "#6b7280" };
+  return AGENTS[role as AgentRole] || { name: role, emoji: "🤖", color: "#8b5cf6" };
 }
