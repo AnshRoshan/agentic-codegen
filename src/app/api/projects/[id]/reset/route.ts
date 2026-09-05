@@ -1,11 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resetProject } from "@/lib/pipeline";
+import { fail, handler, json } from "@/lib/server/http";
+import { abortRun } from "@/lib/server/engine";
+import { resetProject, serializeProject } from "@/lib/server/repo";
 
 export const dynamic = "force-dynamic";
-type Ctx = { params: Promise<{ id: string }> };
 
-export async function POST(_req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  await resetProject(id);
-  return NextResponse.json({ ok: true });
-}
+export const POST = handler<{ id: string }>(async (_req, { id }) => {
+  abortRun(id);
+  await new Promise((r) => setTimeout(r, 100));
+  const p = await resetProject(id);
+  if (!p) return fail(404, "Project not found");
+  return json({ project: serializeProject(p) });
+});

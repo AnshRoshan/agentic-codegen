@@ -1,31 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { projects } from "@/db/schema";
-import { runNextStep } from "@/lib/pipeline";
+import { z } from "zod";
+import { fail, handler, json, parseBody } from "@/lib/server/http";
+import { pauseRun, startRun } from "@/lib/server/engine";
+import { getProject, serializeProject } from "@/lib/server/repo";
 
 export const dynamic = "force-dynamic";
 
-type Ctx = { params: Promise<{ id: string }> };
+const schema = z.object({ action: z.enum(["start", "pause", "step"]) });
 
-/** Advance the agent pipeline by one step. Clients poll this while the project is running. */
-export async function POST(req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const body = (await req.json().catch(() => ({}))) as { action?: "start" | "step" | "pause" | "resume" };
-
-  if (body.action === "pause") {
-    const [row] = await db.update(projects).set({ status: "paused", updatedAt: new Date() }).where(eq(projects.id, id)).returning();
-    return NextResponse.json({ ok: true, status: row?.status ?? "paused" });
-  }
-  if (body.action === "resume" || body.action === "start") {
-    const [current] = await db.select().from(projects).where(eq(projects.id, id));
-    if (!current) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
-    if (current.status === "paused" || current.status === "draft") {
-      const status = current.currentStep === 0 ? "planning" : current.currentStep >= current.totalSteps ? "completed" : "generating";
-      await db.update(projects).set({ status, updatedAt: new Date() }).where(eq(projects.id, id));
+export const POST = handler<{ id: string }>(async (req, { id }) => {
+  const { action } = await parseBody(req, schema);
+  if (action === "pause") {
+    await pauseRun(id);
+  } else {
+    const r = await startRun(id, { single: action === "step" });
+    if (!r.ok) {
+      const status = r.code === "not_found" ? 404 : 409;
+      return fail(status, r.reason, { code: r.code });
     }
   }
-
-  const result = await runNextStep(id);
-  return NextResponse.json(result, { status: result.ok ? 200 : 400 });
-}
+  // Give the loop a moment so the first poll already reflects the new state.
+  await new Promise((r) => setTimeout(r, 150));
+  const p = await getProject(id);
+  if (!p) return fail(404, "Project not found");
+  return json({ project: serializeProject(p) });
+});

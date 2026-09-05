@@ -1,33 +1,23 @@
-import { eq } from "drizzle-orm";
 import JSZip from "jszip";
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { environmentVariables, fileNodes, projects } from "@/db/schema";
-import { kebab } from "@/lib/domain";
+import { fail, handler } from "@/lib/server/http";
+import { allFilesWithContent, getProject } from "@/lib/server/repo";
 
 export const dynamic = "force-dynamic";
-type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const [project] = await db.select().from(projects).where(eq(projects.id, id));
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const [files, env] = await Promise.all([
-    db.select().from(fileNodes).where(eq(fileNodes.projectId, id)),
-    db.select().from(environmentVariables).where(eq(environmentVariables.projectId, id)),
-  ]);
-  if (!files.length) return NextResponse.json({ error: "No files generated yet" }, { status: 400 });
-
+export const GET = handler<{ id: string }>(async (_req, { id }) => {
+  const p = await getProject(id);
+  if (!p) return fail(404, "Project not found");
+  const files = await allFilesWithContent(id);
   const zip = new JSZip();
-  const root = zip.folder(kebab(project.name))!;
-  for (const f of files) root.file(f.path, f.content);
-  if (env.length) root.file(".env", env.map((e) => `${e.key}=${e.isSecret ? "" : e.value}`).join("\n") + "\n");
-
-  const buffer = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
-  return new NextResponse(new Blob([buffer as BlobPart]), {
+  const folder = p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "project";
+  for (const f of files) zip.file(`${folder}/${f.path}`, f.content);
+  zip.file(`${folder}/FORGE.json`, JSON.stringify({ project: p.name, prompt: p.prompt, domain: p.domainLabel, architecture: p.architecture, generatedAt: new Date().toISOString(), files: files.length }, null, 2));
+  const buf = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  return new Response(Buffer.from(buf), {
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${kebab(project.name)}.zip"`,
+      "Content-Disposition": `attachment; filename="${folder}.zip"`,
+      "Cache-Control": "no-store",
     },
   });
-}
+});

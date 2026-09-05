@@ -1,34 +1,30 @@
-import { and, eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { agentMessages, fileNodes } from "@/db/schema";
+import { z } from "zod";
+import { fail, handler, json, parseBody } from "@/lib/server/http";
+import { getProject, readFile, upsertFile, deleteFile, listFiles } from "@/lib/server/repo";
 
 export const dynamic = "force-dynamic";
-type Ctx = { params: Promise<{ id: string }> };
 
-/** GET ?path=src/app/page.tsx → file with content */
-export async function GET(req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const path = req.nextUrl.searchParams.get("path");
-  if (!path) return NextResponse.json({ error: "path is required" }, { status: 422 });
-  const [row] = await db.select().from(fileNodes).where(and(eq(fileNodes.projectId, id), eq(fileNodes.path, path)));
-  if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(row);
-}
+export const GET = handler<{ id: string }>(async (req, { id }) => {
+  const path = new URL(req.url).searchParams.get("path");
+  if (!path) return json({ files: await listFiles(id) });
+  const f = await readFile(id, path);
+  if (!f) return fail(404, "File not found");
+  return json({ file: { ...f, createdAt: f.createdAt.toISOString(), updatedAt: f.updatedAt.toISOString() } });
+});
 
-/** PUT { path, content } → save user edits to a file */
-export async function PUT(req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const body = (await req.json().catch(() => ({}))) as { path?: string; content?: string };
-  if (!body.path || typeof body.content !== "string") return NextResponse.json({ error: "path and content are required" }, { status: 422 });
-  const [existing] = await db.select().from(fileNodes).where(and(eq(fileNodes.projectId, id), eq(fileNodes.path, body.path)));
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const [row] = await db
-    .update(fileNodes)
-    .set({ content: body.content, size: body.content.length, version: existing.version + 1, isModified: true, updatedAt: new Date() })
-    .where(eq(fileNodes.id, existing.id))
-    .returning();
-  await db.insert(agentMessages).values({ id: nanoid(), projectId: id, kind: "user", content: `Edited ${body.path} (v${row.version})`, metadata: { path: body.path } });
-  return NextResponse.json(row);
-}
+const putSchema = z.object({ path: z.string().min(1).max(300), content: z.string().max(400_000) });
+
+export const PUT = handler<{ id: string }>(async (req, { id }) => {
+  const body = await parseBody(req, putSchema);
+  if (!(await getProject(id))) return fail(404, "Project not found");
+  const r = await upsertFile(id, "user", body.path, body.content, { userEdit: true });
+  const f = await readFile(id, r.path);
+  return json({ file: f ? { ...f, createdAt: f.createdAt.toISOString(), updatedAt: f.updatedAt.toISOString() } : null });
+});
+
+export const DELETE = handler<{ id: string }>(async (req, { id }) => {
+  const path = new URL(req.url).searchParams.get("path");
+  if (!path) return fail(400, "path is required");
+  const ok = await deleteFile(id, path);
+  return ok ? json({ ok: true }) : fail(404, "File not found");
+});

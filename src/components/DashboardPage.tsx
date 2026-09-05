@@ -100,7 +100,7 @@ export default function DashboardPage({ onNew }: { onNew: () => void }) {
         <div className="mt-4 grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
           {list.map((p) => {
             const pct = p.totalSteps ? Math.round((Math.min(p.currentStep, p.totalSteps) / p.totalSteps) * 100) : 0;
-            const pending = (workspaces[p.id]?.checkpoints ?? []).filter((c) => c.status === "pending").length;
+            const pending = workspaces[p.id] ? workspaces[p.id].checkpoints.filter((c) => c.status === "pending").length : (p.pendingCheckpoints ?? 0);
             return (
               <div key={p.id} className="card card-hover group flex flex-col p-5">
                 <div className="flex items-start justify-between gap-2">

@@ -272,19 +272,11 @@ export function SearchPalette({ project, ws, open, onClose, onOpenFile, onGoto }
   );
 }
 
-// ─── Download project bundle (JSON) ─────────────────────────────────────────
-export function downloadBundle(project: Project, ws: WorkspaceData) {
-  const bundle = {
-    project: { name: project.name, domain: project.domainLabel, generatedAt: new Date().toISOString() },
-    files: ws.files.map((f) => ({ path: f.path, language: f.language, content: f.content })),
-    tables: ws.tables.map((t) => ({ name: t.name, sql: t.sql })),
-    envExample: ws.env.map((e) => `${e.key}=`).join("\n"),
-  };
-  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+// ─── Download project bundle (zip from the server) ──────────────────────────
+export function downloadBundle(project: Project, _ws?: WorkspaceData) {
+  void _ws;
   const a = document.createElement("a");
-  a.href = url;
-  a.download = `${project.name.toLowerCase().replace(/\s+/g, "-")}-bundle.json`;
+  a.href = `/api/projects/${project.id}/download`;
+  a.download = `${project.name.toLowerCase().replace(/\s+/g, "-")}.zip`;
   a.click();
-  URL.revokeObjectURL(url);
 }

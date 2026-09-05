@@ -423,7 +423,7 @@ export default function WorkspacePage() {
   const pct = project.totalSteps ? Math.round((Math.min(project.currentStep, project.totalSteps) / project.totalSteps) * 100) : 0;
   const pending = ws.checkpoints.filter((c) => c.status === "pending");
   const isRunning = !!running[pid];
-  const canStart = ["draft", "paused", "planning", "generating", "building", "testing", "deploying"].includes(project.status) && !isRunning && project.currentStep < project.totalSteps;
+  const canStart = ["draft", "paused", "failed", "planning", "generating", "building", "testing", "deploying"].includes(project.status) && !isRunning && project.currentStep < project.totalSteps;
   const currentStep = project.plan[project.currentStep];
   const badge = (id: WorkspaceTab): number =>
     id === "approvals" ? pending.length : id === "files" ? ws.files.length : id === "database" ? ws.tables.length : 0;
@@ -450,8 +450,11 @@ export default function WorkspacePage() {
                 </button>
               )}
             </div>
-            <div className="mt-0.5 truncate text-[12px] text-ink-500">
-              {project.domainLabel} · {currentStep ? `next: ${currentStep.title}` : "pipeline complete"} · {formatCost(project.costMicros)}
+            <div className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-ink-500">
+              <span className={cn("chip !px-1.5 !py-0 !text-[9.5px] uppercase tracking-wider", project.engineMode === "llm" ? "border-emerald-400/30 text-emerald-300" : "border-amber-400/30 text-amber-300")}>
+                {project.engineMode === "llm" ? "LLM agents" : "Simulation"}
+              </span>
+              <span className="truncate">{project.domainLabel} · {isRunning ? `running: ${currentStep?.title ?? "finishing"}` : currentStep ? `next: ${currentStep.title}` : "pipeline complete"} · {formatCost(project.costMicros)}</span>
             </div>
           </div>
 
@@ -474,7 +477,7 @@ export default function WorkspacePage() {
             {isRunning ? (
               <button onClick={() => pausePipeline(pid)} className="btn-secondary btn-sm"><Pause size={13} /> Pause</button>
             ) : canStart ? (
-              <button onClick={() => startPipeline(pid)} className="btn-primary btn-sm"><Play size={13} /> {project.status === "draft" ? "Start" : "Resume"}</button>
+              <button onClick={() => startPipeline(pid)} className="btn-primary btn-sm"><Play size={13} /> {project.status === "draft" ? "Start" : project.status === "failed" ? "Retry step" : "Resume"}</button>
             ) : null}
             {!isRunning && project.currentStep < project.totalSteps && project.status !== "waiting_approval" && (
               <button onClick={() => stepOnce(pid)} className="btn-secondary btn-sm" title="Run one step">
@@ -511,6 +514,21 @@ export default function WorkspacePage() {
           </div>
         </div>
       </div>
+
+      {project.status === "failed" && project.errorMessage && (
+        <div className="flex items-start gap-2.5 border-b border-rose-400/20 bg-rose-500/[0.08] px-4 py-2.5 text-[12.5px] text-rose-100">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-rose-300" />
+          <div className="min-w-0 flex-1"><span className="font-semibold">Pipeline halted:</span> <span className="break-words">{project.errorMessage}</span>
+            <span className="text-rose-200/70"> — fix the cause (provider, budget, settings) and retry the step.</span></div>
+          <button onClick={() => startPipeline(pid)} className="btn-secondary btn-sm shrink-0"><Play size={12} /> Retry step</button>
+        </div>
+      )}
+      {project.status === "paused" && !isRunning && project.currentStep < project.totalSteps && (
+        <div className="flex items-center gap-2.5 border-b border-amber-400/20 bg-amber-500/[0.06] px-4 py-2 text-[12.5px] text-amber-100">
+          <Pause size={14} className="shrink-0 text-amber-300" /> Pipeline paused at step {project.currentStep + 1} of {project.totalSteps}.
+          <button onClick={() => startPipeline(pid)} className="btn-secondary btn-sm ml-auto"><Play size={12} /> Resume</button>
+        </div>
+      )}
 
       {/* ── Body: rail + content + inspector ── */}
       <div className="flex min-h-0 flex-1">

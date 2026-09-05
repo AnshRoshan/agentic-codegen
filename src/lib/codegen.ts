@@ -168,7 +168,6 @@ export default defineConfig({
   dbCredentials: { url: process.env.DATABASE_URL! },
 });`),
     file("src/app/layout.tsx", `import type { Metadata } from "next";
-import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -179,11 +178,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
-        <AppShell>{children}</AppShell>
-      </body>
+      <body className="min-h-screen bg-zinc-950 text-zinc-100 antialiased">{children}</body>
     </html>
   );
+}`),
+    file("src/app/page.tsx", `import { redirect } from "next/navigation";
+
+export default function Home() {
+  redirect("/dashboard");
 }`),
     file("src/app/globals.css", `@import "tailwindcss";
 
@@ -430,14 +432,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
 // ─── Frontend shell ─────────────────────────────────────────────────────────
 export function frontendShellFiles(projectName: string, arch: Architecture): GeneratedFile[] {
-  const nav = arch.entities.map((e) => `    { href: "/${e.slug}", label: "${titleCase(e.plural)}" },`).join("\n");
+  const nav = arch.entities.map((e) => `    { href: "/dashboard/${e.slug}", label: "${titleCase(e.plural)}" },`).join("\n");
   return [
     file("src/components/AppShell.tsx", `"use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
-  { href: "/", label: "Overview" },
+  { href: "/dashboard", label: "Overview" },
 ${nav}
 ];
 
@@ -446,7 +448,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="w-60 shrink-0 border-r border-zinc-800 bg-zinc-900/50 p-4">
-        <Link href="/" className="mb-6 block text-lg font-bold">${projectName}</Link>
+        <Link href="/dashboard" className="mb-6 block text-lg font-bold">${projectName}</Link>
         <nav className="space-y-1">
           {NAV.map((item) => (
             <Link
@@ -486,10 +488,15 @@ export function DataTable<T extends { id: string }>({ rows, columns, empty }: { 
     </div>
   );
 }`),
-    file("src/app/page.tsx", `import Link from "next/link";
+    file("src/app/dashboard/layout.tsx", `import { AppShell } from "@/components/AppShell";
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return <AppShell>{children}</AppShell>;
+}`),
+    file("src/app/dashboard/page.tsx", `import Link from "next/link";
 
 const CARDS = [
-${arch.entities.map((e) => `  { title: "${titleCase(e.plural)}", href: "/${e.slug}", desc: "Manage ${e.slug.replace(/-/g, " ")}" },`).join("\n")}
+${arch.entities.map((e) => `  { title: "${titleCase(e.plural)}", href: "/dashboard/${e.slug}", desc: "Manage ${e.slug.replace(/-/g, " ")}" },`).join("\n")}
 ];
 
 export default function Dashboard() {
@@ -523,7 +530,7 @@ export function entityPageFiles(arch: Architecture): GeneratedFile[] {
       if (fld.type === "text") return `        <label className="block text-sm"><span className="text-zinc-400">${titleCase(fld.name)}</span>\n          <textarea name="${fld.name}" className="input mt-1" ${fld.required === false ? "" : "required"} /></label>`;
       return `        <label className="block text-sm"><span className="text-zinc-400">${titleCase(fld.name)}</span>\n          <input name="${fld.name}" type="${fld.type === "number" ? "number" : fld.type === "date" ? "date" : "text"}" className="input mt-1" ${fld.required === false ? "" : "required"} /></label>`;
     }).join("\n");
-    out.push(file(`src/app/${e.slug}/page.tsx`, `import { DataTable } from "@/components/DataTable";
+    out.push(file(`src/app/dashboard/${e.slug}/page.tsx`, `import { DataTable } from "@/components/DataTable";
 import Link from "next/link";
 
 async function getRows() {
@@ -542,7 +549,7 @@ export default async function ${e.name}ListPage() {
           <h1 className="text-2xl font-bold">${titleCase(e.plural)}</h1>
           <p className="text-sm text-zinc-400">{rows.length} record{rows.length === 1 ? "" : "s"}</p>
         </div>
-        <Link href="/${e.slug}/new" className="btn-primary">New ${e.name}</Link>
+        <Link href="/dashboard/${e.slug}/new" className="btn-primary">New ${e.name}</Link>
       </div>
       <DataTable
         rows={rows}
@@ -554,7 +561,8 @@ ${cols}
     </div>
   );
 }`));
-    out.push(file(`src/app/${e.slug}/new/page.tsx`, `import Link from "next/link";
+    out.push(file(`src/app/dashboard/${e.slug}/new/page.tsx`, `import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default function New${e.name}Page() {
   async function create(formData: FormData) {
@@ -565,12 +573,13 @@ export default function New${e.name}Page() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    redirect("/dashboard/${e.slug}");
   }
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div>
-        <Link href="/${e.slug}" className="text-sm text-zinc-400 hover:text-white">← Back to ${titleCase(e.plural)}</Link>
+        <Link href="/dashboard/${e.slug}" className="text-sm text-zinc-400 hover:text-white">← Back to ${titleCase(e.plural)}</Link>
         <h1 className="mt-2 text-2xl font-bold">New ${e.name}</h1>
       </div>
       <form action={create} className="card space-y-4">

@@ -122,7 +122,7 @@ function GlobalPalette({ open, onClose, onNew }: { open: boolean; onClose: () =>
           ))}
           {projs.length > 0 && <div className="px-2.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-ink-500">Projects</div>}
           {projs.map((p) => {
-            const pending = (workspaces[p.id]?.checkpoints ?? []).filter((c) => c.status === "pending").length;
+            const pending = workspaces[p.id] ? workspaces[p.id].checkpoints.filter((c) => c.status === "pending").length : (p.pendingCheckpoints ?? 0);
             return (
               <button key={p.id} onClick={() => go(() => { setActiveId(p.id); setWtab(pending > 0 ? "approvals" : "overview"); setView("workspace"); })}
                 className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] hover:bg-white/[0.06]">

@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { AGENT_ORDER, AGENTS } from "../lib/types";
 import { PRESETS } from "../lib/domains";
-import { AI_MODELS } from "../lib/models";
+import { formatContext, AI_MODELS } from "../lib/models";
 import { useStore } from "../lib/store";
 import { Logo } from "./ui";
 import { cn } from "../utils/cn";
@@ -370,7 +370,7 @@ export default function LandingPage() {
                 <span className="text-[14px] font-semibold">{m.name}</span>
                 <span className="chip !text-[10.5px]">{m.provider}</span>
               </div>
-              <div className="mt-2 font-mono text-[11.5px] text-ink-400">{m.context} · ${m.inputPer1M}/${m.outputPer1M} per 1M</div>
+              <div className="mt-2 font-mono text-[11.5px] text-ink-400">{formatContext(m.contextTokens)} · ${m.inputPer1M}/${m.outputPer1M} per 1M</div>
               <div className="mt-2 text-[12px] text-ink-300">{m.bestFor.slice(0, 2).join(" · ")}</div>
             </div>
           ))}

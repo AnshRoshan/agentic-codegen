@@ -1,38 +1,20 @@
-import { and, asc, eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { agentMessages, environmentVariables } from "@/db/schema";
+import { z } from "zod";
+import { fail, handler, json, parseBody } from "@/lib/server/http";
+import { getProject, setEnvVar } from "@/lib/server/repo";
 
 export const dynamic = "force-dynamic";
-type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const rows = await db.select().from(environmentVariables).where(eq(environmentVariables.projectId, id)).orderBy(asc(environmentVariables.key));
-  return NextResponse.json(rows);
-}
+const schema = z.object({
+  key: z.string().trim().min(1).max(64).regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Use letters, digits and underscores"),
+  value: z.string().max(4000).default(""),
+  description: z.string().max(300).optional(),
+  isSecret: z.boolean().optional(),
+});
 
-export async function POST(req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const body = (await req.json().catch(() => ({}))) as { key?: string; value?: string; description?: string; isSecret?: boolean; isRequired?: boolean };
-  const key = body.key?.trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_");
-  if (!key) return NextResponse.json({ error: "Key is required" }, { status: 422 });
-  const [existing] = await db.select().from(environmentVariables).where(and(eq(environmentVariables.projectId, id), eq(environmentVariables.key, key)));
-  if (existing) return NextResponse.json({ error: `${key} already exists` }, { status: 409 });
-  const [row] = await db
-    .insert(environmentVariables)
-    .values({
-      id: nanoid(),
-      projectId: id,
-      key,
-      value: body.value ?? "",
-      description: body.description ?? null,
-      isSecret: !!body.isSecret,
-      isRequired: body.isRequired ?? true,
-      source: "user",
-    })
-    .returning();
-  await db.insert(agentMessages).values({ id: nanoid(), projectId: id, kind: "user", content: `Added environment variable ${key}` });
-  return NextResponse.json(row, { status: 201 });
-}
+export const POST = handler<{ id: string }>(async (req, { id }) => {
+  const body = await parseBody(req, schema);
+  if (!(await getProject(id))) return fail(404, "Project not found");
+  const secret = body.isSecret ?? /SECRET|KEY|TOKEN|PASSWORD|PRIVATE/i.test(body.key);
+  const r = await setEnvVar(id, body.key, body.value, body.description ?? "Added manually", secret, "user");
+  return json({ ok: true, id: r.id, key: r.key, created: r.created }, { status: r.created ? 201 : 200 });
+});

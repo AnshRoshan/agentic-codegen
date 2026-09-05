@@ -47,9 +47,22 @@ export interface Project {
   generatedFiles: number; totalTasks: number; completedTasks: number;
   tokensIn: number; tokensOut: number; costMicros: number;
   llmCalls: number; toolCalls: number;
+  repairIterations?: number;
   errorMessage: string | null;
+  engineMode: "llm" | "simulation";
+  settings: ProjectSettings;
+  isRunning: boolean;
+  pendingCheckpoints?: number;
   startedAt: string | null; completedAt: string | null;
   createdAt: string; updatedAt: string;
+}
+
+export interface ProjectSettings {
+  agentModels?: Record<string, string>;
+  maxStepsPerTask?: number;
+  maxRetries?: number;
+  maxRepairIterations?: number;
+  budgetMicros?: number;
 }
 
 export interface Agent {
@@ -62,6 +75,7 @@ export interface Agent {
 export interface Task {
   id: string; projectId: string; agentRole: string; stepKey: string;
   title: string; description: string; status: TaskStatus; order: number;
+  attempts?: number; error?: string | null; tokensIn?: number; tokensOut?: number; durationMs?: number;
   output: string | null; startedAt: string | null; completedAt: string | null;
 }
 
@@ -91,7 +105,7 @@ export interface AgentMessage {
 
 export interface CommandExec {
   id: string; projectId: string; agentRole: string | null;
-  command: string; stdout: string; durationMs: number; exitCode: number; createdAt: string;
+  command: string; stdout: string; stderr?: string; durationMs: number; exitCode: number; createdAt: string;
 }
 
 export interface Checkpoint {
@@ -99,12 +113,13 @@ export interface Checkpoint {
   title: string; description: string; riskLevel: "low" | "medium" | "high";
   context: { summary?: string[]; diff?: string; command?: string; affected?: string[] };
   status: CheckpointStatus; note: string | null; createdAt: string; resolvedAt: string | null;
+  agentRole?: string | null; stepIndex?: number;
 }
 
 export interface LlmCall {
   id: string; projectId: string; agentRole: string | null;
-  model: string; promptTokens: number; completionTokens: number;
-  purpose: string; costMicros: number; createdAt: string;
+  model: string; provider?: string; promptTokens: number; completionTokens: number;
+  purpose: string; costMicros: number; durationMs?: number; toolCalls?: number; status?: string; finishReason?: string | null; createdAt: string;
 }
 
 export interface WorkspaceData {
@@ -130,7 +145,7 @@ export const AGENTS: Record<AgentRole, AgentDefinition> = {
     description: "Reads your brief, infers the product domain, decomposes it into a dependency-ordered task graph and hands each task to a specialist.",
     capabilities: ["Requirement analysis", "Domain & entity inference", "Task graph creation", "Agent coordination", "Failure recovery"],
     tools: ["analyze_requirements", "create_task", "assign_agent", "check_status"],
-    color: "#8b5cf6", model: "gpt-4.1",
+    color: "#8b5cf6", model: "gpt-5",
   },
   architect: {
     role: "architect", name: "Architect", emoji: "📐",
@@ -138,7 +153,7 @@ export const AGENTS: Record<AgentRole, AgentDefinition> = {
     description: "Chooses the stack, defines components and data flow, writes the architecture document and scaffolds the project skeleton.",
     capabilities: ["System design", "API contracts", "Folder structure", "Stack validation", "Design patterns"],
     tools: ["define_architecture", "create_file", "create_api_contract"],
-    color: "#06b6d4", model: "gpt-4.1",
+    color: "#06b6d4", model: "gpt-5",
   },
   database: {
     role: "database", name: "Database", emoji: "🗄️",

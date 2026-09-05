@@ -1,30 +1,34 @@
-import { desc, ilike, or } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { projects } from "@/db/schema";
-import { initializeProject } from "@/lib/pipeline";
+import { z } from "zod";
+import { handler, json, parseBody } from "@/lib/server/http";
+import { createProject, listProjects } from "@/lib/server/repo";
+import { getSettingsRow, resolveAiConfig } from "@/lib/server/ai";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q")?.trim();
-  const where = q ? or(ilike(projects.name, `%${q}%`), ilike(projects.prompt, `%${q}%`), ilike(projects.domainLabel, `%${q}%`)) : undefined;
-  const rows = await db.select().from(projects).where(where).orderBy(desc(projects.updatedAt));
-  return NextResponse.json(rows);
-}
+export const GET = handler(async () => json({ projects: await listProjects() }));
 
-export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as { name?: string; prompt?: string; mode?: string; autoApprove?: boolean };
-  const prompt = body.prompt?.trim();
-  if (!prompt || prompt.length < 12) {
-    return NextResponse.json({ error: "Please describe what you want to build (at least 12 characters)." }, { status: 422 });
-  }
-  const id = await initializeProject({
-    name: body.name,
-    prompt,
-    mode: body.mode === "brownfield" ? "brownfield" : "greenfield",
-    autoApprove: !!body.autoApprove,
+const createSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(80),
+  prompt: z.string().trim().min(12, "Describe the product in at least a sentence").max(6000),
+  mode: z.enum(["greenfield", "brownfield"]).default("greenfield"),
+  emoji: z.string().trim().max(8).optional(),
+  autoApprove: z.boolean().optional(),
+  settings: z.object({
+    agentModels: z.record(z.string(), z.string()).optional(),
+    maxStepsPerTask: z.number().int().min(2).max(40).optional(),
+    maxRetries: z.number().int().min(0).max(5).optional(),
+    maxRepairIterations: z.number().int().min(0).max(5).optional(),
+    budgetMicros: z.number().int().min(0).optional(),
+  }).optional(),
+});
+
+export const POST = handler(async (req) => {
+  const body = await parseBody(req, createSchema);
+  const [cfg, settings] = await Promise.all([resolveAiConfig(), getSettingsRow()]);
+  const project = await createProject({
+    ...body,
+    autoApprove: body.autoApprove ?? settings.autoApproveDefault,
+    engineMode: cfg ? "llm" : "simulation",
   });
-  const [project] = await db.select().from(projects).where(ilike(projects.id, id));
-  return NextResponse.json(project, { status: 201 });
-}
+  return json({ project: { ...project, isRunning: false } }, { status: 201 });
+});
