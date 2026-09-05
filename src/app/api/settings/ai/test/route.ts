@@ -1,102 +1,53 @@
-import { NextRequest, NextResponse } from "next/server";
-import { generateText } from "ai";
+import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { aiSettings } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { buildLanguageModel, type ResolvedAiConfig } from "@/lib/ai-provider";
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const {
-      provider,
-      apiKey,
-      baseUrl,
-      model,
-      azureResourceName,
-      azureApiVersion,
-    } = body as {
-      provider: "openai" | "azure" | "custom";
-      apiKey?: string;
-      baseUrl?: string;
-      model?: string;
-      azureResourceName?: string;
-      azureApiVersion?: string;
-    };
+export const dynamic = "force-dynamic";
 
-    // Use provided key, or fall back to stored key if the field was left masked/blank
-    let effectiveKey = apiKey?.trim();
-    if (!effectiveKey) {
-      const [existing] = await db
-        .select()
-        .from(aiSettings)
-        .where(eq(aiSettings.id, "default"));
-      effectiveKey = existing?.apiKey ?? undefined;
-    }
+/** Verifies the configured provider credentials by listing models. */
+export async function POST() {
+  const [row] = await db.select().from(aiSettings).where(eq(aiSettings.id, "default"));
+  const apiKey = row?.apiKey ?? process.env.OPENAI_API_KEY ?? null;
+  const provider = row?.provider ?? "openai";
+  let status = "failure";
+  let message = "";
 
-    if (!effectiveKey) {
-      return NextResponse.json(
-        { success: false, message: "No API key provided" },
-        { status: 400 }
-      );
-    }
-
-    const config: ResolvedAiConfig = {
-      provider,
-      apiKey: effectiveKey,
-      baseUrl: baseUrl?.trim() || null,
-      model: model?.trim() || "gpt-4o-mini",
-      azureResourceName: azureResourceName?.trim() || null,
-      azureApiVersion: azureApiVersion?.trim() || "2025-01-01-preview",
-    };
-
-    const languageModel = buildLanguageModel(config);
-
-    const result = await generateText({
-      model: languageModel,
-      prompt: "Reply with exactly the word: OK",
-      maxOutputTokens: 10,
-    });
-
-    const success = result.text.trim().length > 0;
-
-    await db
-      .update(aiSettings)
-      .set({
-        lastTestedAt: new Date(),
-        lastTestStatus: success ? "success" : "failure",
-        lastTestMessage: success
-          ? `Connected successfully. Model responded: "${result.text.trim().slice(0, 50)}"`
-          : "Model returned an empty response.",
-        updatedAt: new Date(),
-      })
-      .where(eq(aiSettings.id, "default"));
-
-    return NextResponse.json({
-      success,
-      message: success
-        ? `Connection successful. Response: "${result.text.trim().slice(0, 80)}"`
-        : "Model returned an empty response.",
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+  if (!apiKey) {
+    message = "No API key configured. Add a key or set OPENAI_API_KEY in the environment.";
+  } else {
     try {
-      await db
-        .update(aiSettings)
-        .set({
-          lastTestedAt: new Date(),
-          lastTestStatus: "failure",
-          lastTestMessage: message.slice(0, 300),
-          updatedAt: new Date(),
-        })
-        .where(eq(aiSettings.id, "default"));
-    } catch {
-      // ignore secondary failure
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 8000);
+      let url = "https://api.openai.com/v1/models";
+      const headers: Record<string, string> = {};
+      if (provider === "anthropic") {
+        url = "https://api.anthropic.com/v1/models";
+        headers["x-api-key"] = apiKey;
+        headers["anthropic-version"] = "2023-06-01";
+      } else if (provider === "azure") {
+        url = `${(row?.baseUrl ?? "").replace(/\/$/, "")}/openai/models?api-version=2024-10-21`;
+        headers["api-key"] = apiKey;
+      } else {
+        url = `${(row?.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "")}/models`;
+        headers.Authorization = `Bearer ${apiKey}`;
+      }
+      const res = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { data?: unknown[] };
+        status = "success";
+        message = `Connected to ${provider}. ${Array.isArray(json.data) ? `${json.data.length} models available.` : "Credentials accepted."}`;
+      } else {
+        message = `${provider} responded with HTTP ${res.status}. Check the key, base URL and model name.`;
+      }
+    } catch (err) {
+      message = `Could not reach ${provider}: ${err instanceof Error ? err.message : "network error"}`;
     }
-    console.error("AI connection test failed:", error);
-    return NextResponse.json(
-      { success: false, message: message.slice(0, 300) },
-      { status: 200 }
-    );
   }
+
+  if (row) {
+    await db.update(aiSettings).set({ lastTestedAt: new Date(), lastTestStatus: status, lastTestMessage: message }).where(eq(aiSettings.id, "default"));
+  }
+  return NextResponse.json({ status, message }, { status: status === "success" ? 200 : 400 });
 }

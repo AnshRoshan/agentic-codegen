@@ -1,115 +1,53 @@
+import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { aiSettings } from "@/db/schema";
-import { eq } from "drizzle-orm";
 
-export async function GET() {
-  try {
-    const [row] = await db
-      .select()
-      .from(aiSettings)
-      .where(eq(aiSettings.id, "default"));
+export const dynamic = "force-dynamic";
 
-    if (!row) {
-      return NextResponse.json({
-        provider: "openai",
-        apiKey: null,
-        baseUrl: null,
-        model: "gpt-4o-mini",
-        azureResourceName: null,
-        azureApiVersion: "2025-01-01-preview",
-        isConfigured: false,
-        hasApiKey: false,
-        lastTestStatus: null,
-        lastTestMessage: null,
-      });
-    }
-
-    // Never send the raw API key back to the client — mask it
-    return NextResponse.json({
-      provider: row.provider,
-      apiKey: null,
-      hasApiKey: Boolean(row.apiKey),
-      apiKeyMasked: row.apiKey ? `${row.apiKey.slice(0, 4)}${"•".repeat(20)}` : null,
-      baseUrl: row.baseUrl,
-      model: row.model,
-      azureResourceName: row.azureResourceName,
-      azureApiVersion: row.azureApiVersion,
-      isConfigured: row.isConfigured,
-      lastTestStatus: row.lastTestStatus,
-      lastTestMessage: row.lastTestMessage,
-      lastTestedAt: row.lastTestedAt,
-    });
-  } catch (error) {
-    console.error("Failed to fetch AI settings:", error);
-    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
-  }
+function mask(key: string | null) {
+  if (!key) return null;
+  return key.length <= 8 ? "••••" : `${key.slice(0, 4)}••••••••${key.slice(-4)}`;
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const {
+async function getOrCreate() {
+  const [row] = await db.select().from(aiSettings).where(eq(aiSettings.id, "default"));
+  if (row) return row;
+  const [created] = await db.insert(aiSettings).values({ id: "default" }).returning();
+  return created;
+}
+
+export async function GET() {
+  const row = await getOrCreate();
+  return NextResponse.json({ ...row, apiKey: undefined, apiKeyMasked: mask(row.apiKey), hasKey: !!row.apiKey, envKeyPresent: !!process.env.OPENAI_API_KEY });
+}
+
+export async function PUT(req: NextRequest) {
+  const body = (await req.json().catch(() => ({}))) as { provider?: string; apiKey?: string; baseUrl?: string; model?: string; temperature?: number };
+  const current = await getOrCreate();
+  const provider = ["openai", "azure", "anthropic", "custom"].includes(body.provider ?? "") ? (body.provider as typeof current.provider) : current.provider;
+  const apiKey = typeof body.apiKey === "string" && body.apiKey.trim() ? body.apiKey.trim() : current.apiKey;
+  const [row] = await db
+    .update(aiSettings)
+    .set({
       provider,
       apiKey,
-      baseUrl,
-      model,
-      azureResourceName,
-      azureApiVersion,
-    } = body as {
-      provider: "openai" | "azure" | "custom";
-      apiKey?: string;
-      baseUrl?: string;
-      model?: string;
-      azureResourceName?: string;
-      azureApiVersion?: string;
-    };
-
-    const [existing] = await db
-      .select()
-      .from(aiSettings)
-      .where(eq(aiSettings.id, "default"));
-
-    const values = {
-      provider,
-      // Only overwrite the stored key if a new one was provided (avoid clobbering with empty string)
-      apiKey: apiKey && apiKey.trim() ? apiKey.trim() : existing?.apiKey ?? null,
-      baseUrl: baseUrl?.trim() || null,
-      model: model?.trim() || "gpt-4o-mini",
-      azureResourceName: azureResourceName?.trim() || null,
-      azureApiVersion: azureApiVersion?.trim() || "2025-01-01-preview",
-      isConfigured: Boolean((apiKey && apiKey.trim()) || existing?.apiKey),
+      baseUrl: typeof body.baseUrl === "string" ? body.baseUrl.trim() || null : current.baseUrl,
+      model: typeof body.model === "string" && body.model.trim() ? body.model.trim() : current.model,
+      temperature: typeof body.temperature === "number" ? Math.round(Math.max(0, Math.min(2, body.temperature)) * 100) : current.temperature,
+      isConfigured: !!apiKey,
       updatedAt: new Date(),
-    };
-
-    if (existing) {
-      await db.update(aiSettings).set(values).where(eq(aiSettings.id, "default"));
-    } else {
-      await db.insert(aiSettings).values({ id: "default", ...values });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Failed to save AI settings:", error);
-    return NextResponse.json({ error: "Failed to save settings" }, { status: 500 });
-  }
+    })
+    .where(eq(aiSettings.id, "default"))
+    .returning();
+  return NextResponse.json({ ...row, apiKey: undefined, apiKeyMasked: mask(row.apiKey), hasKey: !!row.apiKey, envKeyPresent: !!process.env.OPENAI_API_KEY });
 }
 
 export async function DELETE() {
-  try {
-    await db
-      .update(aiSettings)
-      .set({
-        apiKey: null,
-        isConfigured: false,
-        lastTestStatus: null,
-        lastTestMessage: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(aiSettings.id, "default"));
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Failed to clear AI settings:", error);
-    return NextResponse.json({ error: "Failed to clear settings" }, { status: 500 });
-  }
+  const [row] = await db
+    .update(aiSettings)
+    .set({ apiKey: null, isConfigured: false, lastTestStatus: null, lastTestMessage: null, updatedAt: new Date() })
+    .where(eq(aiSettings.id, "default"))
+    .returning();
+  return NextResponse.json({ ...row, apiKey: undefined, apiKeyMasked: null, hasKey: false });
 }

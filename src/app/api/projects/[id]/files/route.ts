@@ -1,97 +1,34 @@
+import { and, eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { fileNodes } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import { agentMessages, fileNodes } from "@/db/schema";
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const dynamic = "force-dynamic";
+type Ctx = { params: Promise<{ id: string }> };
+
+/** GET ?path=src/app/page.tsx → file with content */
+export async function GET(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const body = await req.json();
-  const { fileId, content } = body as { fileId: string; content: string };
+  const path = req.nextUrl.searchParams.get("path");
+  if (!path) return NextResponse.json({ error: "path is required" }, { status: 422 });
+  const [row] = await db.select().from(fileNodes).where(and(eq(fileNodes.projectId, id), eq(fileNodes.path, path)));
+  if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json(row);
+}
 
-  if (!fileId || content === undefined) {
-    return NextResponse.json({ error: "fileId and content are required" }, { status: 400 });
-  }
-
-  const [updated] = await db
+/** PUT { path, content } → save user edits to a file */
+export async function PUT(req: NextRequest, { params }: Ctx) {
+  const { id } = await params;
+  const body = (await req.json().catch(() => ({}))) as { path?: string; content?: string };
+  if (!body.path || typeof body.content !== "string") return NextResponse.json({ error: "path and content are required" }, { status: 422 });
+  const [existing] = await db.select().from(fileNodes).where(and(eq(fileNodes.projectId, id), eq(fileNodes.path, body.path)));
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const [row] = await db
     .update(fileNodes)
-    .set({
-      content,
-      size: Buffer.byteLength(content, "utf8"),
-      isModified: true,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(fileNodes.id, fileId), eq(fileNodes.projectId, id)))
+    .set({ content: body.content, size: body.content.length, version: existing.version + 1, isModified: true, updatedAt: new Date() })
+    .where(eq(fileNodes.id, existing.id))
     .returning();
-
-  if (!updated) return NextResponse.json({ error: "File not found" }, { status: 404 });
-  return NextResponse.json(updated);
-}
-
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  const body = await req.json();
-  const { path, content, language, type } = body as {
-    path: string;
-    content?: string;
-    language?: string;
-    type: "file" | "directory";
-  };
-
-  if (!path?.trim()) return NextResponse.json({ error: "Path is required" }, { status: 400 });
-
-  const name = path.split("/").pop() ?? path;
-  const parentPath = path.split("/").slice(0, -1).join("/");
-  let parentId: string | null = null;
-
-  if (parentPath) {
-    const parentRows = await db
-      .select()
-      .from(fileNodes)
-      .where(and(eq(fileNodes.projectId, id), eq(fileNodes.path, parentPath)));
-    parentId = parentRows[0]?.id ?? null;
-  }
-
-  const [created] = await db
-    .insert(fileNodes)
-    .values({
-      id: nanoid(12),
-      projectId: id,
-      agentId: null,
-      parentId,
-      name,
-      path,
-      type,
-      content: content ?? null,
-      language: language ?? null,
-      size: content ? Buffer.byteLength(content, "utf8") : null,
-      isGenerated: false,
-      isModified: false,
-    })
-    .returning();
-
-  return NextResponse.json(created, { status: 201 });
-}
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  const { searchParams } = new URL(req.url);
-  const fileId = searchParams.get("fileId");
-
-  if (!fileId) return NextResponse.json({ error: "fileId required" }, { status: 400 });
-
-  await db
-    .delete(fileNodes)
-    .where(and(eq(fileNodes.id, fileId), eq(fileNodes.projectId, id)));
-
-  return NextResponse.json({ success: true });
+  await db.insert(agentMessages).values({ id: nanoid(), projectId: id, kind: "user", content: `Edited ${body.path} (v${row.version})`, metadata: { path: body.path } });
+  return NextResponse.json(row);
 }

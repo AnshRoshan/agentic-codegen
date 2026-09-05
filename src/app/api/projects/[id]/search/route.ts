@@ -1,56 +1,29 @@
+import { and, eq, ilike, or } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { fileNodes } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const dynamic = "force-dynamic";
+type Ctx = { params: Promise<{ id: string }> };
+
+/** Full-text-ish search across generated files: returns matching lines with context. */
+export async function GET(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const { searchParams } = new URL(req.url);
-  const query = searchParams.get("q")?.toLowerCase() ?? "";
-
-  if (!query || query.length < 2) {
-    return NextResponse.json({ results: [] });
-  }
-
-  const allFiles = await db
-    .select()
+  const q = req.nextUrl.searchParams.get("q")?.trim();
+  if (!q || q.length < 2) return NextResponse.json({ results: [] });
+  const rows = await db
+    .select({ path: fileNodes.path, content: fileNodes.content, language: fileNodes.language })
     .from(fileNodes)
-    .where(and(eq(fileNodes.projectId, id), eq(fileNodes.type, "file")));
-
-  const results: Array<{
-    fileId: string;
-    path: string;
-    language: string | null;
-    matches: Array<{ line: number; text: string }>;
-  }> = [];
-
-  for (const file of allFiles) {
-    const content = file.content ?? "";
-    if (!content) continue;
-
-    const lines = content.split("\n");
+    .where(and(eq(fileNodes.projectId, id), or(ilike(fileNodes.content, `%${q}%`), ilike(fileNodes.path, `%${q}%`))))
+    .limit(40);
+  const needle = q.toLowerCase();
+  const results = rows.map((r) => {
+    const lines = r.content.split("\n");
     const matches: Array<{ line: number; text: string }> = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].toLowerCase().includes(query)) {
-        matches.push({ line: i + 1, text: lines[i].trim().slice(0, 200) });
-        if (matches.length >= 5) break; // max 5 matches per file
-      }
-    }
-
-    if (matches.length > 0 || file.path.toLowerCase().includes(query)) {
-      results.push({
-        fileId: file.id,
-        path: file.path,
-        language: file.language,
-        matches: matches.length > 0 ? matches : [{ line: 0, text: "filename match" }],
-      });
-      if (results.length >= 50) break;
-    }
-  }
-
-  return NextResponse.json({ results, query });
+    lines.forEach((text, i) => {
+      if (text.toLowerCase().includes(needle) && matches.length < 5) matches.push({ line: i + 1, text: text.trim().slice(0, 160) });
+    });
+    return { path: r.path, language: r.language, matches };
+  });
+  return NextResponse.json({ results });
 }

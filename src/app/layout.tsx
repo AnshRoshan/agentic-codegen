@@ -1,41 +1,28 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EDL — Agentic Codebase Studio",
+  title: "Forge — Agentic Full-Stack Code Generation",
   description:
-    "Production-grade agentic codebase generation. Universal domain inference, specialized AI crew, live Monaco editor, database designer, env-var vault, human-in-the-loop approvals, and full token/cost observability.",
-  keywords: ["AI", "code generation", "agents", "Next.js", "greenfield", "brownfield", "EDL"],
-  openGraph: {
-    title: "EDL — Agentic Codebase Studio",
-    description: "Generate any full-stack application with orchestrated AI agents.",
-    type: "website",
-  },
-};
-
-export const viewport: Viewport = {
-  themeColor: "#04070d",
-  width: "device-width",
-  initialScale: 1,
+    "Describe the product. A team of seven specialised AI agents plans the architecture, models the database, writes the API, builds the UI, tests it and ships it — with you approving the risky steps.",
+  keywords: ["AI agents", "code generation", "full-stack", "Next.js", "PostgreSQL"],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap"
-          rel="stylesheet"
+      <body className="min-h-screen font-sans">
+        {children}
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            style: { background: "#141829", border: "1px solid rgba(255,255,255,0.08)", color: "#eef1f9" },
+          }}
         />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@700;800;900&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="min-h-screen">{children}</body>
+      </body>
     </html>
   );
 }
