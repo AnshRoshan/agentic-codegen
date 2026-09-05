@@ -1,77 +1,44 @@
-import type { Architecture, Entity, EntityField } from "@/db/schema";
-import { camel, kebab, snake, titleCase } from "./domain";
+import type { Architecture, Entity, EntityField } from "./types";
+import { camel, kebab, snake, titleCase } from "./domains";
 
-export interface GeneratedFile {
-  path: string;
-  content: string;
-  language: string;
-}
+export interface GeneratedFile { path: string; content: string; language: string; }
 
 export function languageFor(path: string) {
   const ext = path.split(".").pop() ?? "";
   const map: Record<string, string> = {
-    ts: "typescript",
-    tsx: "tsx",
-    js: "javascript",
-    mjs: "javascript",
-    json: "json",
-    css: "css",
-    md: "markdown",
-    yml: "yaml",
-    yaml: "yaml",
-    sql: "sql",
-    sh: "bash",
-    env: "bash",
-    example: "bash",
+    ts: "typescript", tsx: "tsx", js: "javascript", mjs: "javascript",
+    json: "json", css: "css", md: "markdown", yml: "yaml", yaml: "yaml",
+    sql: "sql", sh: "bash",
   };
   if (path.startsWith("Dockerfile")) return "docker";
   if (path.startsWith(".env")) return "bash";
   return map[ext] ?? "text";
 }
 
-const file = (path: string, content: string): GeneratedFile => ({
-  path,
-  content: content.trimStart(),
-  language: languageFor(path),
-});
+const file = (path: string, content: string): GeneratedFile =>
+  ({ path, content: content.trimStart(), language: languageFor(path) });
 
-// ─── Field helpers ────────────────────────────────────────────────────────────
-
+// ─── Field helpers ──────────────────────────────────────────────────────────
 function drizzleColumn(fld: EntityField, entity: Entity): string {
   const col = snake(fld.name);
-  const notNull = fld.required === false ? "" : ".notNull()";
+  const nn = fld.required === false ? "" : ".notNull()";
   switch (fld.type) {
-    case "string":
-      return `  ${fld.name}: text("${col}")${notNull},`;
-    case "text":
-      return `  ${fld.name}: text("${col}")${notNull},`;
-    case "number":
-      return `  ${fld.name}: integer("${col}")${notNull}.default(0),`;
-    case "boolean":
-      return `  ${fld.name}: boolean("${col}")${notNull}.default(false),`;
-    case "date":
-      return `  ${fld.name}: timestamp("${col}")${notNull},`;
-    case "enum":
-      return `  ${fld.name}: ${camel(entity.name)}${titleCase(fld.name).replace(/ /g, "")}Enum("${col}")${notNull}.default("${fld.enumValues?.[0]}"),`;
-    case "reference":
-      return `  ${fld.name}: text("${col}")${notNull}.references(() => ${camel(fld.references ?? "user") + "s"}.id, { onDelete: "cascade" }),`;
-    default:
-      return `  ${fld.name}: text("${col}")${notNull},`;
+    case "number": return `  ${fld.name}: integer("${col}")${nn}.default(0),`;
+    case "boolean": return `  ${fld.name}: boolean("${col}")${nn}.default(false),`;
+    case "date": return `  ${fld.name}: timestamp("${col}")${nn},`;
+    case "enum": return `  ${fld.name}: ${camel(entity.name)}${titleCase(fld.name).replace(/ /g, "")}Enum("${col}")${nn}.default("${fld.enumValues?.[0]}"),`;
+    case "reference": return `  ${fld.name}: text("${col}")${nn}.references(() => ${camel(fld.references ?? "user")}s.id, { onDelete: "cascade" }),`;
+    default: return `  ${fld.name}: text("${col}")${nn},`;
   }
 }
 
 function sqlType(fld: EntityField) {
   switch (fld.type) {
-    case "number":
-      return "integer";
-    case "boolean":
-      return "boolean";
-    case "date":
-      return "timestamp";
-    case "enum":
-      return "text";
-    default:
-      return "text";
+    case "number": return "integer";
+    case "boolean": return "boolean";
+    case "date": return "timestamp";
+    case "enum": return "text";
+    default: return "text";
   }
 }
 
@@ -109,23 +76,12 @@ export function createTableSql(entity: Entity) {
 function zodField(fld: EntityField) {
   let z: string;
   switch (fld.type) {
-    case "number":
-      z = "z.coerce.number()";
-      break;
-    case "boolean":
-      z = "z.coerce.boolean()";
-      break;
-    case "date":
-      z = "z.coerce.date()";
-      break;
-    case "enum":
-      z = `z.enum([${fld.enumValues?.map((v) => `"${v}"`).join(", ")}])`;
-      break;
-    case "text":
-      z = "z.string().max(10_000)";
-      break;
-    default:
-      z = fld.name.toLowerCase().includes("email") ? "z.string().email()" : "z.string().min(1).max(255)";
+    case "number": z = "z.coerce.number()"; break;
+    case "boolean": z = "z.coerce.boolean()"; break;
+    case "date": z = "z.coerce.date()"; break;
+    case "enum": z = `z.enum([${fld.enumValues?.map((v) => `"${v}"`).join(", ")}])`; break;
+    case "text": z = "z.string().max(10_000)"; break;
+    default: z = fld.name.toLowerCase().includes("email") ? "z.string().email()" : "z.string().min(1).max(255)";
   }
   if (fld.required === false) z += ".optional()";
   return `  ${fld.name}: ${z},`;
@@ -133,30 +89,22 @@ function zodField(fld: EntityField) {
 
 function sampleValue(fld: EntityField, i: number) {
   switch (fld.type) {
-    case "number":
-      return String((i + 1) * 12);
-    case "boolean":
-      return i % 2 === 0 ? "true" : "false";
-    case "date":
-      return `new Date(Date.now() - ${i} * 86_400_000)`;
-    case "enum":
-      return `"${fld.enumValues?.[i % (fld.enumValues.length || 1)]}"`;
-    case "reference":
-      return `${camel(fld.references ?? "user")}Ids[${i} % ${camel(fld.references ?? "user")}Ids.length]`;
+    case "number": return String((i + 1) * 12);
+    case "boolean": return i % 2 === 0 ? "true" : "false";
+    case "date": return `new Date(Date.now() - ${i} * 86_400_000)`;
+    case "enum": return `"${fld.enumValues?.[i % (fld.enumValues.length || 1)]}"`;
+    case "reference": return `${camel(fld.references ?? "user")}Ids[${i} % ${camel(fld.references ?? "user")}Ids.length]`;
     default:
       if (fld.name.toLowerCase().includes("email")) return `"${fld.name}${i + 1}@example.com"`;
       return `"${titleCase(fld.name)} ${i + 1}"`;
   }
 }
 
-// ─── Generators per step ──────────────────────────────────────────────────────
-
+// ─── Scaffold ───────────────────────────────────────────────────────────────
 export function scaffoldFiles(projectName: string, arch: Architecture): GeneratedFile[] {
   const slug = kebab(projectName);
   return [
-    file(
-      "package.json",
-      `{
+    file("package.json", `{
   "name": "${slug}",
   "private": true,
   "scripts": {
@@ -188,12 +136,8 @@ export function scaffoldFiles(projectName: string, arch: Architecture): Generate
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }
-}
-`,
-    ),
-    file(
-      "tsconfig.json",
-      `{
+}`),
+    file("tsconfig.json", `{
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["dom", "dom.iterable", "esnext"],
@@ -206,36 +150,24 @@ export function scaffoldFiles(projectName: string, arch: Architecture): Generate
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
-}
-`,
-    ),
-    file(
-      "next.config.ts",
-      `import type { NextConfig } from "next";
+}`),
+    file("next.config.ts", `import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   experimental: { typedRoutes: true },
 };
 
-export default nextConfig;
-`,
-    ),
-    file(
-      "drizzle.config.ts",
-      `import { defineConfig } from "drizzle-kit";
+export default nextConfig;`),
+    file("drizzle.config.ts", `import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
   dialect: "postgresql",
   schema: "./src/db/schema.ts",
   out: "./drizzle",
   dbCredentials: { url: process.env.DATABASE_URL! },
-});
-`,
-    ),
-    file(
-      "src/app/layout.tsx",
-      `import type { Metadata } from "next";
+});`),
+    file("src/app/layout.tsx", `import type { Metadata } from "next";
 import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
@@ -252,12 +184,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </body>
     </html>
   );
-}
-`,
-    ),
-    file(
-      "src/app/globals.css",
-      `@import "tailwindcss";
+}`),
+    file("src/app/globals.css", `@import "tailwindcss";
 
 @theme {
   --color-brand-500: oklch(0.72 0.19 264);
@@ -265,24 +193,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
-:root {
-  color-scheme: dark;
-}
+:root { color-scheme: dark; }
 
 .card {
   @apply rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm;
 }
-.btn {
-  @apply inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition;
-}
-.btn-primary {
-  @apply btn bg-brand-500 text-white hover:bg-brand-600;
-}
-`,
-    ),
-    file(
-      "src/lib/utils.ts",
-      `export function cn(...classes: Array<string | false | null | undefined>) {
+.btn { @apply inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition; }
+.btn-primary { @apply btn bg-brand-500 text-white hover:bg-brand-600; }`),
+    file("src/lib/utils.ts", `export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
@@ -292,25 +210,20 @@ export function formatDate(value: string | Date) {
 
 export function formatCurrency(value: number, currency = "USD") {
   return new Intl.NumberFormat("en", { style: "currency", currency }).format(value);
-}
-`,
-    ),
-    file(
-      "README.md",
-      `# ${projectName}
+}`),
+    file("README.md", `# ${projectName}
 
 ${arch.overview}
 
 ## Features
 
-${arch.features.map((f) => `- ${f}`).join("\n")}
+${arch.features.map((x) => `- ${x}`).join("\n")}
 
 ## Stack
 
 - Next.js 16 (App Router) · React 19 · TypeScript
 - PostgreSQL · Drizzle ORM
-- Tailwind CSS v4
-- Vitest
+- Tailwind CSS v4 · Vitest
 
 ## Getting started
 
@@ -324,12 +237,8 @@ npm run dev
 
 ## Domain model
 
-${arch.entities.map((e) => `- **${e.name}** — ${e.fields.map((fl) => fl.name).join(", ")}`).join("\n")}
-`,
-    ),
-    file(
-      "docs/ARCHITECTURE.md",
-      `# Architecture
+${arch.entities.map((e) => `- **${e.name}** — ${e.fields.map((fl) => fl.name).join(", ")}`).join("\n")}`),
+    file("docs/ARCHITECTURE.md", `# Architecture
 
 ## Overview
 
@@ -341,20 +250,16 @@ ${arch.components.map((c) => `### ${c.name} (${c.type})\n${c.description}\n\nDep
 
 ## Data flow
 
-${arch.dataFlow.map((d, i) => `${i + 1}. ${d}`).join("\n")}
-`,
-    ),
+${arch.dataFlow.map((d, i) => `${i + 1}. ${d}`).join("\n")}`),
   ];
 }
 
+// ─── Database ───────────────────────────────────────────────────────────────
 export function databaseFiles(arch: Architecture): GeneratedFile[] {
   const enums = arch.entities.flatMap((e) =>
-    e.fields
-      .filter((fld) => fld.type === "enum")
-      .map(
-        (fld) =>
-          `export const ${camel(e.name)}${titleCase(fld.name).replace(/ /g, "")}Enum = pgEnum("${snake(e.name)}_${snake(fld.name)}", [${fld.enumValues?.map((v) => `"${v}"`).join(", ")}]);`,
-      ),
+    e.fields.filter((fld) => fld.type === "enum").map(
+      (fld) => `export const ${camel(e.name)}${titleCase(fld.name).replace(/ /g, "")}Enum = pgEnum("${snake(e.name)}_${snake(fld.name)}", [${fld.enumValues?.map((v) => `"${v}"`).join(", ")}]);`
+    )
   );
   const tables = arch.entities.map(
     (e) => `export const ${camel(e.plural)} = pgTable("${snake(e.plural)}", {
@@ -365,320 +270,174 @@ ${e.fields.map((fld) => drizzleColumn(fld, e)).join("\n")}
 });
 
 export type ${e.name} = typeof ${camel(e.plural)}.$inferSelect;
-export type New${e.name} = typeof ${camel(e.plural)}.$inferInsert;`,
+export type New${e.name} = typeof ${camel(e.plural)}.$inferInsert;`
   );
-
-  const seed = arch.entities
-    .map((e) => {
-      const rows = [0, 1, 2]
-        .map((i) => `    { id: nanoid(), ${e.fields.map((fld) => `${fld.name}: ${sampleValue(fld, i)}`).join(", ")} },`)
-        .join("\n");
-      return `  const ${camel(e.plural)}Rows = [\n${rows}\n  ];\n  await db.insert(${camel(e.plural)}).values(${camel(e.plural)}Rows).onConflictDoNothing();\n  const ${camel(e.name)}Ids = ${camel(e.plural)}Rows.map((r) => r.id);\n  void ${camel(e.name)}Ids;`;
-    })
-    .join("\n\n");
+  const seedBlocks = arch.entities.map((e, ei) => {
+    const rows = [0, 1, 2].map((i) =>
+      `    { id: nanoid(), ${e.fields.map((fld) => `${fld.name}: ${sampleValue(fld, i + ei)}`).join(", ")} }`
+    ).join(",\n");
+    return `  const ${camel(e.plural)}Rows = [\n${rows}\n  ];\n  await db.insert(${camel(e.plural)}).values(${camel(e.plural)}Rows);\n  console.log("  ✔ ${snake(e.plural)}: ${camel(e.plural)}Rows.length} rows");`;
+  });
 
   return [
-    file(
-      "src/db/schema.ts",
-      `import { pgTable, pgEnum, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
-
-// ─── Enums ───────────────────────────────────────────
-${enums.join("\n")}
-
-// ─── Tables ──────────────────────────────────────────
-${tables.join("\n\n")}
-`,
-    ),
-    file(
-      "src/db/index.ts",
-      `import { drizzle } from "drizzle-orm/node-postgres";
+    file("src/db/index.ts", `import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import * as schema from "./schema";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool, { schema });
-`,
-    ),
-    file(
-      "src/db/seed.ts",
-      `import { nanoid } from "nanoid";
+export const db = drizzle(pool);`),
+    file("src/db/schema.ts", `import { pgTable, pgEnum, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+
+${enums.join("\n")}
+
+${tables.join("\n\n")}`),
+    file("src/db/seed.ts", `import { nanoid } from "nanoid";
 import { db } from "./index";
 import { ${arch.entities.map((e) => camel(e.plural)).join(", ")} } from "./schema";
 
 async function main() {
-${seed}
-
-  console.log("✔ Seeded ${arch.entities.length} tables");
+${arch.entities.map((e) => `  const ${camel(e.name)}Ids = ["${e.slug}-1", "${e.slug}-2", "${e.slug}-3"];`).join("\n")}
+${seedBlocks.join("\n\n")}
+  console.log("\\n✔ Seeded ${arch.entities.length} tables");
+  process.exit(0);
 }
 
-main().then(() => process.exit(0));
-`,
-    ),
-    file(
-      "drizzle/0000_initial.sql",
-      arch.entities.map((e) => createTableSql(e)).join("\n\n") + "\n",
-    ),
+main().catch((err) => { console.error(err); process.exit(1); });`),
+    file("drizzle/0001_init.sql", arch.entities.map(createTableSql).join("\n\n")),
   ];
 }
 
-export function apiFiles(entity: Entity): GeneratedFile[] {
-  const plural = camel(entity.plural);
-  const schemaName = `${camel(entity.name)}Schema`;
-  const stringField = entity.fields.find((fl) => fl.type === "string")?.name ?? "id";
+// ─── Auth ───────────────────────────────────────────────────────────────────
+export function authFiles(arch: Architecture): GeneratedFile[] {
+  void arch;
   return [
-    file(
-      `src/lib/validation/${kebab(entity.name)}.ts`,
-      `import { z } from "zod";
-
-export const ${schemaName} = z.object({
-${entity.fields.map(zodField).join("\n")}
-});
-
-export const ${camel(entity.name)}UpdateSchema = ${schemaName}.partial();
-export type ${entity.name}Input = z.infer<typeof ${schemaName}>;
-`,
-    ),
-    file(
-      `src/services/${kebab(entity.plural)}.ts`,
-      `import { and, desc, eq, ilike, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { db } from "@/db";
-import { ${plural} } from "@/db/schema";
-import type { ${entity.name}Input } from "@/lib/validation/${kebab(entity.name)}";
-
-export interface ListOptions {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-}
-
-export async function list${entity.plural}({ page = 1, pageSize = 20, search }: ListOptions = {}) {
-  const where = search ? ilike(${plural}.${stringField}, \`%\${search}%\`) : undefined;
-  const [rows, [{ count }]] = await Promise.all([
-    db.select().from(${plural}).where(where).orderBy(desc(${plural}.createdAt)).limit(pageSize).offset((page - 1) * pageSize),
-    db.select({ count: sql<number>\`count(*)::int\` }).from(${plural}).where(where),
-  ]);
-  return { rows, total: count, page, pageSize };
-}
-
-export async function get${entity.name}(id: string) {
-  const [row] = await db.select().from(${plural}).where(eq(${plural}.id, id));
-  return row ?? null;
-}
-
-export async function create${entity.name}(input: ${entity.name}Input) {
-  const [row] = await db.insert(${plural}).values({ id: nanoid(), ...input }).returning();
-  return row;
-}
-
-export async function update${entity.name}(id: string, input: Partial<${entity.name}Input>) {
-  const [row] = await db
-    .update(${plural})
-    .set({ ...input, updatedAt: new Date() })
-    .where(and(eq(${plural}.id, id)))
-    .returning();
-  return row ?? null;
-}
-
-export async function delete${entity.name}(id: string) {
-  const [row] = await db.delete(${plural}).where(eq(${plural}.id, id)).returning({ id: ${plural}.id });
-  return !!row;
-}
-`,
-    ),
-    file(
-      `src/app/api/${entity.slug}/route.ts`,
-      `import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/lib/auth";
-import { ${schemaName} } from "@/lib/validation/${kebab(entity.name)}";
-import { create${entity.name}, list${entity.plural} } from "@/services/${kebab(entity.plural)}";
-
-export async function GET(req: NextRequest) {
-  await requireSession();
-  const { searchParams } = req.nextUrl;
-  const result = await list${entity.plural}({
-    page: Number(searchParams.get("page") ?? 1),
-    pageSize: Math.min(Number(searchParams.get("pageSize") ?? 20), 100),
-    search: searchParams.get("q") ?? undefined,
-  });
-  return NextResponse.json(result);
-}
-
-export async function POST(req: NextRequest) {
-  await requireSession();
-  const parsed = ${schemaName}.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 422 });
-  }
-  const created = await create${entity.name}(parsed.data);
-  return NextResponse.json(created, { status: 201 });
-}
-`,
-    ),
-    file(
-      `src/app/api/${entity.slug}/[id]/route.ts`,
-      `import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/lib/auth";
-import { ${camel(entity.name)}UpdateSchema } from "@/lib/validation/${kebab(entity.name)}";
-import { delete${entity.name}, get${entity.name}, update${entity.name} } from "@/services/${kebab(entity.plural)}";
-
-type Ctx = { params: Promise<{ id: string }> };
-
-export async function GET(_req: NextRequest, { params }: Ctx) {
-  await requireSession();
-  const { id } = await params;
-  const row = await get${entity.name}(id);
-  return row ? NextResponse.json(row) : NextResponse.json({ error: "Not found" }, { status: 404 });
-}
-
-export async function PATCH(req: NextRequest, { params }: Ctx) {
-  await requireSession();
-  const { id } = await params;
-  const parsed = ${camel(entity.name)}UpdateSchema.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 422 });
-  }
-  const row = await update${entity.name}(id, parsed.data);
-  return row ? NextResponse.json(row) : NextResponse.json({ error: "Not found" }, { status: 404 });
-}
-
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  await requireSession();
-  const { id } = await params;
-  const ok = await delete${entity.name}(id);
-  return ok ? new NextResponse(null, { status: 204 }) : NextResponse.json({ error: "Not found" }, { status: 404 });
-}
-`,
-    ),
-  ];
-}
-
-export function authFiles(): GeneratedFile[] {
-  return [
-    file(
-      "src/lib/auth.ts",
-      `import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual } from "node:crypto";
+    file("src/lib/auth.ts", `import { cookies } from "next/headers";
+import bcrypt from "bcryptjs";
 
 const SESSION_COOKIE = "session";
 
-function sign(payload: string) {
-  return createHmac("sha256", process.env.SESSION_SECRET!).update(payload).digest("base64url");
+export interface Session { userId: string; email: string; role: string; }
+
+export async function hashPassword(password: string) {
+  return bcrypt.hash(password, 12);
 }
 
-export function createSessionToken(userId: string, role: string) {
-  const payload = Buffer.from(JSON.stringify({ userId, role, exp: Date.now() + 7 * 864e5 })).toString("base64url");
-  return \`\${payload}.\${sign(payload)}\`;
+export async function verifyPassword(password: string, hash: string) {
+  return bcrypt.compare(password, hash);
 }
 
-export function verifySessionToken(token: string) {
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature) return null;
-  const expected = sign(payload);
-  if (expected.length !== signature.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return null;
-  const data = JSON.parse(Buffer.from(payload, "base64url").toString()) as { userId: string; role: string; exp: number };
-  return data.exp > Date.now() ? data : null;
+export async function getSession(): Promise<Session | null> {
+  const store = await cookies();
+  const raw = store.get(SESSION_COOKIE)?.value;
+  if (!raw) return null;
+  try { return JSON.parse(Buffer.from(raw, "base64").toString()); }
+  catch { return null; }
 }
 
-export async function getSession() {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  return token ? verifySessionToken(token) : null;
-}
-
-export async function requireSession(roles?: string[]) {
+export async function requireRole(roles: string[]) {
   const session = await getSession();
-  if (!session) throw new Response("Unauthorized", { status: 401 });
-  if (roles && !roles.includes(session.role)) throw new Response("Forbidden", { status: 403 });
-  return session;
-}
-`,
-    ),
-    file(
-      "src/app/api/auth/login/route.ts",
-      `import { NextRequest, NextResponse } from "next/server";
-import { compare } from "bcryptjs";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { createSessionToken } from "@/lib/auth";
-
-const schema = z.object({ email: z.string().email(), password: z.string().min(8) });
-
-export async function POST(req: NextRequest) {
-  const parsed = schema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ error: "Invalid credentials" }, { status: 422 });
-
-  const [user] = await db.select().from(users).where(eq(users.email, parsed.data.email));
-  const passwordHash = (user as unknown as { passwordHash?: string } | undefined)?.passwordHash ?? "";
-  if (!user || !(await compare(parsed.data.password, passwordHash))) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  if (!session || !roles.includes(session.role)) {
+    throw new Response("Forbidden", { status: 403 });
   }
-
-  const res = NextResponse.json({ id: user.id, email: user.email, role: user.role });
-  res.cookies.set("session", createSessionToken(user.id, user.role), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 24 * 7,
-    path: "/",
-  });
-  return res;
-}
-`,
-    ),
-    file(
-      "src/app/api/auth/logout/route.ts",
-      `import { NextResponse } from "next/server";
-
-export async function POST() {
-  const res = NextResponse.json({ ok: true });
-  res.cookies.set("session", "", { maxAge: 0, path: "/" });
-  return res;
-}
-`,
-    ),
-    file(
-      "src/app/api/health/route.ts",
-      `import { sql } from "drizzle-orm";
-import { db } from "@/db";
+  return session;
+}`),
+    file("src/app/api/health/route.ts", `import { NextResponse } from "next/server";
 
 export async function GET() {
-  try {
-    await db.execute(sql\`select 1\`);
-    return Response.json({ ok: true, uptime: process.uptime() });
-  } catch {
-    return Response.json({ ok: false }, { status: 503 });
-  }
-}
-`,
-    ),
-    file(
-      ".env.example",
-      `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app
+  return NextResponse.json({ status: "ok", timestamp: new Date().toISOString() });
+}`),
+    file(".env.example", `# Database
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/appdb
+
+# Auth
 SESSION_SECRET=change-me-to-a-long-random-string
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-`,
-    ),
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000`),
   ];
 }
 
-export function frontendShellFiles(projectName: string, arch: Architecture): GeneratedFile[] {
-  const nav = arch.entities
-    .filter((e) => e.name !== "User")
-    .map((e) => `  { href: "/${e.slug}", label: "${titleCase(e.plural)}" },`)
-    .join("\n");
-  return [
-    file(
-      "src/components/AppShell.tsx",
-      `"use client";
+// ─── API ────────────────────────────────────────────────────────────────────
+export function apiFiles(arch: Architecture): GeneratedFile[] {
+  const out: GeneratedFile[] = [];
+  for (const e of arch.entities) {
+    const table = camel(e.plural);
+    out.push(file(`src/lib/validators/${kebab(e.name)}.ts`, `import { z } from "zod";
 
+export const ${camel(e.name)}Schema = z.object({
+${e.fields.map(zodField).join("\n")}
+});
+
+export const ${camel(e.name)}FilterSchema = z.object({
+  q: z.string().optional(),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+});
+
+export type ${e.name}Input = z.infer<typeof ${camel(e.name)}Schema>;`));
+    out.push(file(`src/app/api/${e.slug}/route.ts`, `import { NextRequest, NextResponse } from "next/server";
+import { nanoid } from "nanoid";
+import { db } from "@/db";
+import { ${table} } from "@/db/schema";
+import { ${camel(e.name)}Schema, ${camel(e.name)}FilterSchema } from "@/lib/validators/${kebab(e.name)}";
+import { requireRole } from "@/lib/auth";
+
+export async function GET(req: NextRequest) {
+  await requireRole(["admin", "editor", "viewer"]);
+  const query = ${camel(e.name)}FilterSchema.parse(Object.fromEntries(req.nextUrl.searchParams));
+  const rows = await db.select().from(${table}).limit(query.limit).offset((query.page - 1) * query.limit);
+  return NextResponse.json({ data: rows, page: query.page, limit: query.limit });
+}
+
+export async function POST(req: NextRequest) {
+  await requireRole(["admin", "editor"]);
+  const body = ${camel(e.name)}Schema.parse(await req.json());
+  const [row] = await db.insert(${table}).values({ id: nanoid(), ...body }).returning();
+  return NextResponse.json(row, { status: 201 });
+}`));
+    out.push(file(`src/app/api/${e.slug}/[id]/route.ts`, `import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { ${table} } from "@/db/schema";
+import { ${camel(e.name)}Schema } from "@/lib/validators/${kebab(e.name)}";
+import { requireRole } from "@/lib/auth";
+
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  await requireRole(["admin", "editor", "viewer"]);
+  const { id } = await params;
+  const [row] = await db.select().from(${table}).where(eq(${table}.id, id)).limit(1);
+  if (!row) return NextResponse.json({ error: "${e.name} not found" }, { status: 404 });
+  return NextResponse.json(row);
+}
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  await requireRole(["admin", "editor"]);
+  const { id } = await params;
+  const body = ${camel(e.name)}Schema.partial().parse(await req.json());
+  const [row] = await db.update(${table}).set({ ...body, updatedAt: new Date() }).where(eq(${table}.id, id)).returning();
+  if (!row) return NextResponse.json({ error: "${e.name} not found" }, { status: 404 });
+  return NextResponse.json(row);
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  await requireRole(["admin"]);
+  const { id } = await params;
+  await db.delete(${table}).where(eq(${table}.id, id));
+  return NextResponse.json({ ok: true });
+}`));
+  }
+  return out;
+}
+
+// ─── Frontend shell ─────────────────────────────────────────────────────────
+export function frontendShellFiles(projectName: string, arch: Architecture): GeneratedFile[] {
+  const nav = arch.entities.map((e) => `    { href: "/${e.slug}", label: "${titleCase(e.plural)}" },`).join("\n");
+  return [
+    file("src/components/AppShell.tsx", `"use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/", label: "Dashboard" },
+  { href: "/", label: "Overview" },
 ${nav}
 ];
 
@@ -686,17 +445,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
     <div className="flex min-h-screen">
-      <aside className="w-60 shrink-0 border-r border-zinc-800 bg-zinc-950 p-4">
-        <div className="mb-6 text-lg font-semibold tracking-tight">${projectName}</div>
+      <aside className="w-60 shrink-0 border-r border-zinc-800 bg-zinc-900/50 p-4">
+        <Link href="/" className="mb-6 block text-lg font-bold">${projectName}</Link>
         <nav className="space-y-1">
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={cn(
-                "block rounded-lg px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100",
-                pathname === item.href && "bg-zinc-900 text-zinc-100",
-              )}
+              className={\`block rounded-lg px-3 py-2 text-sm \${pathname === item.href ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/5"}\`}
             >
               {item.label}
             </Link>
@@ -706,304 +462,177 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 p-8">{children}</main>
     </div>
   );
-}
-`,
-    ),
-    file(
-      "src/components/DataTable.tsx",
-      `"use client";
+}`),
+    file("src/components/DataTable.tsx", `interface Column<T> { key: keyof T & string; label: string; render?: (row: T) => React.ReactNode; }
 
-import { useMemo, useState } from "react";
-
-export interface Column<T> {
-  key: keyof T & string;
-  header: string;
-  render?: (row: T) => React.ReactNode;
-}
-
-export function DataTable<T extends { id: string }>({ rows, columns, onDelete }: { rows: T[]; columns: Column<T>[]; onDelete?: (id: string) => void }) {
-  const [query, setQuery] = useState("");
-  const filtered = useMemo(
-    () => rows.filter((r) => JSON.stringify(r).toLowerCase().includes(query.toLowerCase())),
-    [rows, query],
-  );
-
-  if (!rows.length) {
-    return <div className="card text-center text-zinc-400">Nothing here yet. Create your first record.</div>;
+export function DataTable<T extends { id: string }>({ rows, columns, empty }: { rows: T[]; columns: Column<T>[]; empty: string }) {
+  if (rows.length === 0) {
+    return <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center text-sm text-zinc-500">{empty}</div>;
   }
-
   return (
-    <div className="card p-0">
-      <div className="border-b border-zinc-800 p-3">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter…" className="w-full rounded-md bg-zinc-900 px-3 py-1.5 text-sm outline-none" />
-      </div>
+    <div className="overflow-hidden rounded-xl border border-zinc-800">
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase text-zinc-500">
-          <tr>{columns.map((c) => <th key={c.key} className="px-4 py-2">{c.header}</th>)}{onDelete && <th />}</tr>
+        <thead className="bg-zinc-900 text-left text-xs uppercase tracking-wider text-zinc-500">
+          <tr>{columns.map((c) => <th key={c.key} className="px-4 py-3">{c.label}</th>)}</tr>
         </thead>
-        <tbody>
-          {filtered.map((row) => (
-            <tr key={row.id} className="border-t border-zinc-800 hover:bg-zinc-900/60">
-              {columns.map((c) => <td key={c.key} className="px-4 py-2">{c.render ? c.render(row) : String(row[c.key] ?? "—")}</td>)}
-              {onDelete && <td className="px-4 py-2 text-right"><button onClick={() => onDelete(row.id)} className="text-xs text-red-400 hover:underline">Delete</button></td>}
+        <tbody className="divide-y divide-zinc-800">
+          {rows.map((row) => (
+            <tr key={row.id} className="hover:bg-white/[0.02]">
+              {columns.map((c) => <td key={c.key} className="px-4 py-3">{c.render ? c.render(row) : String(row[c.key] ?? "—")}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
-}
-`,
-    ),
-    file(
-      "src/app/page.tsx",
-      `import Link from "next/link";
-import { sql } from "drizzle-orm";
-import { db } from "@/db";
-import { ${arch.entities.map((e) => camel(e.plural)).join(", ")} } from "@/db/schema";
+}`),
+    file("src/app/page.tsx", `import Link from "next/link";
 
-export const dynamic = "force-dynamic";
+const CARDS = [
+${arch.entities.map((e) => `  { title: "${titleCase(e.plural)}", href: "/${e.slug}", desc: "Manage ${e.slug.replace(/-/g, " ")}" },`).join("\n")}
+];
 
-export default async function DashboardPage() {
-  const counts = await Promise.all([
-${arch.entities.map((e) => `    db.select({ n: sql<number>\`count(*)::int\` }).from(${camel(e.plural)}).then((r) => ({ label: "${titleCase(e.plural)}", href: "/${e.slug}", n: r[0].n })),`).join("\n")}
-  ]);
-
+export default function Dashboard() {
   return (
-    <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-zinc-400">${arch.overview.replace(/"/g, '\\"')}</p>
-      </header>
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {counts.map((c) => (
-          <Link key={c.href} href={c.href} className="card hover:border-zinc-700">
-            <div className="text-xs uppercase tracking-wide text-zinc-500">{c.label}</div>
-            <div className="mt-2 text-3xl font-semibold">{c.n}</div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Overview</h1>
+        <p className="text-sm text-zinc-400">${arch.overview}</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {CARDS.map((c) => (
+          <Link key={c.href} href={c.href} className="card transition hover:border-zinc-600">
+            <div className="font-semibold">{c.title}</div>
+            <div className="mt-1 text-sm text-zinc-400">{c.desc}</div>
           </Link>
         ))}
-      </section>
+      </div>
     </div>
   );
-}
-`,
-    ),
+}`),
   ];
 }
 
-export function entityPageFiles(entity: Entity): GeneratedFile[] {
-  const plural = camel(entity.plural);
-  const visible = entity.fields.filter((fl) => fl.type !== "text").slice(0, 5);
-  return [
-    file(
-      `src/app/${entity.slug}/page.tsx`,
-      `import { list${entity.plural} } from "@/services/${kebab(entity.plural)}";
-import { ${entity.plural}Client } from "./${entity.plural}Client";
+// ─── Entity pages ───────────────────────────────────────────────────────────
+export function entityPageFiles(arch: Architecture): GeneratedFile[] {
+  const out: GeneratedFile[] = [];
+  for (const e of arch.entities.filter((x) => x.name !== "User")) {
+    const cols = e.fields.slice(0, 4).map((fld) => `      { key: "${fld.name}", label: "${titleCase(fld.name)}" },`).join("\n");
+    const inputs = e.fields.slice(0, 5).map((fld) => {
+      if (fld.type === "enum") return `        <label className="block text-sm"><span className="text-zinc-400">${titleCase(fld.name)}</span>\n          <select name="${fld.name}" className="input mt-1">${fld.enumValues?.map((v) => `<option value="${v}">${titleCase(v)}</option>`).join("")}</select></label>`;
+      if (fld.type === "text") return `        <label className="block text-sm"><span className="text-zinc-400">${titleCase(fld.name)}</span>\n          <textarea name="${fld.name}" className="input mt-1" ${fld.required === false ? "" : "required"} /></label>`;
+      return `        <label className="block text-sm"><span className="text-zinc-400">${titleCase(fld.name)}</span>\n          <input name="${fld.name}" type="${fld.type === "number" ? "number" : fld.type === "date" ? "date" : "text"}" className="input mt-1" ${fld.required === false ? "" : "required"} /></label>`;
+    }).join("\n");
+    out.push(file(`src/app/${e.slug}/page.tsx`, `import { DataTable } from "@/components/DataTable";
+import Link from "next/link";
 
-export const dynamic = "force-dynamic";
-
-export default async function ${entity.plural}Page({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
-  const { q, page } = await searchParams;
-  const data = await list${entity.plural}({ search: q, page: Number(page ?? 1) });
-  return <${entity.plural}Client initial={data} />;
+async function getRows() {
+  const res = await fetch(\`\${process.env.NEXT_PUBLIC_APP_URL}/api/${e.slug}\`, { cache: "no-store" });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.data ?? [];
 }
-`,
-    ),
-    file(
-      `src/app/${entity.slug}/${entity.plural}Client.tsx`,
-      `"use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { DataTable } from "@/components/DataTable";
-import { ${entity.name}Form } from "@/components/${entity.name}Form";
-import type { ${entity.name} } from "@/db/schema";
-
-export function ${entity.plural}Client({ initial }: { initial: { rows: ${entity.name}[]; total: number } }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this ${entity.name.toLowerCase()}?")) return;
-    await fetch(\`/api/${entity.slug}/\${id}\`, { method: "DELETE" });
-    router.refresh();
-  }
-
+export default async function ${e.name}ListPage() {
+  const rows = await getRows();
   return (
-    <div className="space-y-6">
-      <header className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">${titleCase(entity.plural)}</h1>
-          <p className="text-sm text-zinc-400">{initial.total} total</p>
+          <h1 className="text-2xl font-bold">${titleCase(e.plural)}</h1>
+          <p className="text-sm text-zinc-400">{rows.length} record{rows.length === 1 ? "" : "s"}</p>
         </div>
-        <button onClick={() => setOpen(true)} className="btn-primary">New ${entity.name}</button>
-      </header>
-
+        <Link href="/${e.slug}/new" className="btn-primary">New ${e.name}</Link>
+      </div>
       <DataTable
-        rows={initial.rows}
-        onDelete={handleDelete}
+        rows={rows}
+        empty="No ${e.slug.replace(/-/g, " ")} yet. Create the first one to get started."
         columns={[
-${visible.map((fl) => `          { key: "${fl.name}", header: "${titleCase(fl.name)}"${fl.type === "date" ? `, render: (r) => r.${fl.name} ? new Date(r.${fl.name}).toLocaleDateString() : "—"` : ""} },`).join("\n")}
+${cols}
         ]}
       />
-
-      {open && (
-        <${entity.name}Form
-          onClose={() => setOpen(false)}
-          onSaved={() => {
-            setOpen(false);
-            router.refresh();
-          }}
-        />
-      )}
     </div>
   );
-}
-`,
-    ),
-    file(
-      `src/components/${entity.name}Form.tsx`,
-      `"use client";
+}`));
+    out.push(file(`src/app/${e.slug}/new/page.tsx`, `import Link from "next/link";
 
-import { useState } from "react";
-import type { ${entity.name}Input } from "@/lib/validation/${kebab(entity.name)}";
-
-const FIELDS = [
-${entity.fields.map((fl) => `  { name: "${fl.name}", label: "${titleCase(fl.name)}", type: "${fl.type}"${fl.enumValues ? `, options: [${fl.enumValues.map((v) => `"${v}"`).join(", ")}]` : ""} },`).join("\n")}
-] as const;
-
-export function ${entity.name}Form({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    const res = await fetch("/api/${entity.slug}", {
+export default function New${e.name}Page() {
+  async function create(formData: FormData) {
+    "use server";
+    const payload = Object.fromEntries(formData);
+    await fetch(\`\${process.env.NEXT_PUBLIC_APP_URL}/api/${e.slug}\`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values as unknown as ${entity.name}Input),
+      body: JSON.stringify(payload),
     });
-    setSaving(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Something went wrong");
-      return;
-    }
-    onSaved();
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" role="dialog" aria-modal>
-      <form onSubmit={submit} className="card w-full max-w-lg space-y-4">
-        <h2 className="text-lg font-semibold">New ${entity.name}</h2>
-        {FIELDS.map((fl) => (
-          <label key={fl.name} className="block text-sm">
-            <span className="mb-1 block text-zinc-400">{fl.label}</span>
-            {"options" in fl ? (
-              <select className="w-full rounded-md bg-zinc-900 px-3 py-2" value={values[fl.name] ?? ""} onChange={(e) => setValues({ ...values, [fl.name]: e.target.value })}>
-                <option value="">Select…</option>
-                {fl.options.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            ) : (
-              <input
-                className="w-full rounded-md bg-zinc-900 px-3 py-2"
-                type={fl.type === "number" ? "number" : fl.type === "date" ? "date" : "text"}
-                value={values[fl.name] ?? ""}
-                onChange={(e) => setValues({ ...values, [fl.name]: e.target.value })}
-              />
-            )}
-          </label>
-        ))}
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="btn text-zinc-400 hover:text-zinc-100">Cancel</button>
-          <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">{saving ? "Saving…" : "Create"}</button>
-        </div>
+    <div className="mx-auto max-w-xl space-y-5">
+      <div>
+        <Link href="/${e.slug}" className="text-sm text-zinc-400 hover:text-white">← Back to ${titleCase(e.plural)}</Link>
+        <h1 className="mt-2 text-2xl font-bold">New ${e.name}</h1>
+      </div>
+      <form action={create} className="card space-y-4">
+${inputs}
+        <button type="submit" className="btn-primary w-full justify-center">Create ${e.name}</button>
       </form>
     </div>
   );
-}
-`,
-    ),
-  ];
+}`));
+  }
+  return out;
 }
 
+// ─── Tests ──────────────────────────────────────────────────────────────────
 export function testFiles(arch: Architecture): GeneratedFile[] {
+  const e = arch.entities[0];
   return [
-    file(
-      "vitest.config.ts",
-      `import { defineConfig } from "vitest/config";
-import path from "node:path";
+    file("vitest.config.ts", `import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  test: { environment: "node", coverage: { reporter: ["text", "lcov"] } },
-  resolve: { alias: { "@": path.resolve(__dirname, "src") } },
-});
-`,
-    ),
-    ...arch.entities.map((e) =>
-      file(
-        `tests/${kebab(e.plural)}.test.ts`,
-        `import { describe, it, expect } from "vitest";
-import { ${camel(e.name)}Schema } from "@/lib/validation/${kebab(e.name)}";
+  test: { environment: "node", include: ["src/**/*.test.ts"] },
+});`),
+    file(`src/lib/validators/${kebab(e.name)}.test.ts`, `import { describe, it, expect } from "vitest";
+import { ${camel(e.name)}Schema } from "./${kebab(e.name)}";
 
 describe("${e.name} validation", () => {
+  it("accepts a valid payload", () => {
+    const result = ${camel(e.name)}Schema.safeParse({
+${e.fields.map((fld) => `      ${fld.name}: ${sampleValue(fld, 0)},`).join("\n")}
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects an empty payload", () => {
     const result = ${camel(e.name)}Schema.safeParse({});
     expect(result.success).toBe(false);
   });
+});`),
+    file("src/lib/auth.test.ts", `import { describe, it, expect } from "vitest";
+import { hashPassword, verifyPassword } from "./auth";
 
-  it("accepts a valid payload", () => {
-    const result = ${camel(e.name)}Schema.safeParse({
-${e.fields.filter((fl) => fl.required !== false).map((fl) => `      ${fl.name}: ${fl.type === "number" ? 1 : fl.type === "boolean" ? "true" : fl.type === "date" ? "new Date().toISOString()" : fl.type === "enum" ? `"${fl.enumValues?.[0]}"` : fl.name.toLowerCase().includes("email") ? '"a@b.co"' : '"example"'},`).join("\n")}
-    });
-    expect(result.success).toBe(true);
-  });
-});
-`,
-      ),
-    ),
-    file(
-      "tests/auth.test.ts",
-      `import { describe, it, expect, beforeAll } from "vitest";
-import { createSessionToken, verifySessionToken } from "@/lib/auth";
-
-beforeAll(() => {
-  process.env.SESSION_SECRET = "test-secret";
-});
-
-describe("session tokens", () => {
-  it("round-trips a signed token", () => {
-    const token = createSessionToken("user_1", "admin");
-    expect(verifySessionToken(token)?.userId).toBe("user_1");
-  });
-
-  it("rejects a tampered token", () => {
-    const token = createSessionToken("user_1", "admin");
-    expect(verifySessionToken(token + "x")).toBeNull();
-  });
-});
-`,
-    ),
+describe("auth", () => {
+  it("hashes and verifies passwords", async () => {
+    const hash = await hashPassword("correct-horse-123");
+    expect(await verifyPassword("correct-horse-123", hash)).toBe(true);
+    expect(await verifyPassword("wrong", hash)).toBe(false);
+  }, 15000);
+});`),
   ];
 }
 
-export function devopsFiles(projectName: string): GeneratedFile[] {
+// ─── DevOps ─────────────────────────────────────────────────────────────────
+export function devopsFiles(projectName: string, arch: Architecture): GeneratedFile[] {
+  void arch;
   const slug = kebab(projectName);
   return [
-    file(
-      "Dockerfile",
-      `FROM node:22-alpine AS deps
+    file("Dockerfile", `FROM node:22-alpine AS base
 WORKDIR /app
-COPY package*.json ./
+COPY package.json package-lock.json* ./
 RUN npm ci
 
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+FROM base AS build
 COPY . .
 RUN npm run build
 
@@ -1014,90 +643,48 @@ COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 EXPOSE 3000
-HEALTHCHECK CMD wget -qO- http://localhost:3000/api/health || exit 1
-CMD ["node", "server.js"]
-`,
-    ),
-    file(
-      "docker-compose.yml",
-      `services:
-  web:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/${snake(slug)}
-      SESSION_SECRET: \${SESSION_SECRET}
-    depends_on:
-      db:
-        condition: service_healthy
+CMD ["node", "server.js"]`),
+    file("docker-compose.yml", `services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ${snake(slug)}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      retries: 10
+      POSTGRES_DB: ${slug}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/${slug}
+    ports: ["3000:3000"]
+    depends_on: [db]
 
 volumes:
-  pgdata:
-`,
-    ),
-    file(
-      ".github/workflows/ci.yml",
-      `name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-
+  pgdata:`),
+    file(".github/workflows/ci.yml", `name: CI
+on: [push, pull_request]
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: postgres }
         ports: ["5432:5432"]
-        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
+        with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
       - run: npm test
-      - run: npm run build
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-
-  deploy:
-    needs: test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t ghcr.io/\${{ github.repository }}:\${{ github.sha }} .
-      - run: echo "Deploying ${slug}…"
-`,
-    ),
-    file(
-      ".dockerignore",
-      `node_modules
+      - run: npm run build`),
+    file(".dockerignore", `node_modules
 .next
 .git
-*.log
 .env
-`,
-    ),
+coverage`),
   ];
 }
