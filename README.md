@@ -37,4 +37,4 @@ Settings UI (stored in `ai_settings`) or environment variables:
 
 ## API
 
-`/api/projects` (GET, POST) · `/api/projects/:id` (GET snapshot with `?filesSince=`, PATCH, DELETE) · `/run` · `/reset` · `/duplicate` · `/files` (GET/PUT/DELETE) · `/env` · `/env/:envId` · `/checkpoints/:cpId` · `/download` (zip) · `/api/settings` (GET/PUT) · `/api/settings/test` · `/api/models` · `/api/health`
+`/api/projects` (GET, POST) · `/api/projects/:id` (GET snapshot with `?filesSince=`, PATCH, DELETE) · `/run` · `/events` (SSE live run stream) · `/reset` · `/duplicate` · `/files` (GET/PUT/DELETE) · `/env` · `/env/:envId` · `/checkpoints/:cpId` · `/download` (zip) · `/api/settings` (GET/PUT) · `/api/settings/test` · `/api/models` · `/api/health`
