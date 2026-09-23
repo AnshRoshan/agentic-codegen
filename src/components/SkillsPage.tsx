@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Blocks, Server, BookOpen, Plug, CheckCircle2, Circle, Wrench } from "lucide-react";
 import { SKILLS, MCP_SERVERS, SKILL_CATEGORIES } from "../lib/skills";
 import { SectionCard } from "./ui";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 export default function SkillsPage() {
   const [cat, setCat] = useState<string>("All");

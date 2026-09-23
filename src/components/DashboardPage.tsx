@@ -7,7 +7,7 @@ import { useStore } from "../lib/store";
 import { PRESETS } from "../lib/domains";
 import { formatCost } from "../lib/models";
 import { Progress, StatusBadge, Empty } from "./ui";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 export default function DashboardPage({ onNew }: { onNew: () => void }) {
   const { projects, workspaces, setActiveId, setView, setWtab, duplicateProject, deleteProject, createFromPreset, startPipeline, running } = useStore();

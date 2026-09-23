@@ -1,6 +1,6 @@
 import React from "react";
 import type { ProjectStatus } from "../lib/types";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 // ─── Status badge ───────────────────────────────────────────────────────────
 const STATUS_STYLE: Record<ProjectStatus, string> = {

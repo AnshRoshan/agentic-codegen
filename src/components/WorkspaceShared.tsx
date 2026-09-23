@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { FileCode2, Folder, FolderOpen, Search, X, ChevronRight } from "lucide-react";
 import type { FileNode, Project, WorkspaceData } from "../lib/types";
 import { agentMeta } from "../lib/types";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 // ─── Safe tokenizer-based tinting (no nested-regex corruption) ──────────────
 const TS_KEYWORDS = new Set("import,from,export,default,const,let,var,function,return,await,async,new,if,else,for,while,try,catch,interface,type,extends,typeof,in,of,as".split(","));

@@ -11,7 +11,7 @@ import { formatCost, formatTokens } from "../lib/models";
 import { Progress, StatusBadge, Toggle, Empty, SectionCard } from "./ui";
 import { AgentTag, SearchPalette, downloadBundle, timeAgo } from "./WorkspaceShared";
 import WorkspaceMore from "./WorkspaceMore";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 const TABS: Array<{ id: WorkspaceTab; label: string; icon: React.ReactNode }> = [
   { id: "overview", label: "Overview", icon: <LayoutGrid size={16} /> },

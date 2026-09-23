@@ -8,7 +8,7 @@ import { PRESETS } from "../lib/domains";
 import { formatContext, AI_MODELS } from "../lib/models";
 import { useStore } from "../lib/store";
 import { Logo } from "./ui";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 // ─── Live terminal preview (right side of hero — the ONLY hero visual) ──────
 const DEMO_LINES = [

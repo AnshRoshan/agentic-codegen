@@ -9,7 +9,7 @@ import { agentMeta } from "../lib/types";
 import { formatCost, formatTokens } from "../lib/models";
 import { Empty, SectionCard } from "./ui";
 import { AgentTag, CodeBlock, FileTree, timeAgo } from "./WorkspaceShared";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 // ─── Files ──────────────────────────────────────────────────────────────────
 function FilesTab({ pid, openFile, setOpenFile }: { pid: string; openFile: string | null; setOpenFile: (p: string | null) => void }) {

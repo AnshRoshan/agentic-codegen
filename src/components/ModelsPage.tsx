@@ -7,7 +7,7 @@ const RUN_TOKENS = Object.values(ROLE_STEP_TOKENS).reduce((acc, t) => ({ in: acc
 import { AGENT_ORDER, AGENTS } from "../lib/types";
 import { useStore } from "../lib/store";
 import { Meter, SectionCard } from "./ui";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 type SortKey = "quality" | "coding" | "speed" | "inputPer1M" | "contextTokens" | "released";
 const TIERS: Array<{ id: ModelTier | "all"; label: string }> = [

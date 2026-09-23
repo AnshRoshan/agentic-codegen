@@ -4,7 +4,7 @@ import { Settings as SettingsIcon, KeyRound, CheckCircle2, XCircle, Loader2, Zap
 import { useStore, type Settings } from "../lib/store";
 import { AI_MODELS, PROVIDER_KEY_LABELS, findModel, formatCost, type ProviderKey } from "../lib/models";
 import { SectionCard, Toggle } from "./ui";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 const PROVIDER_HELP: Record<ProviderKey, { keyPlaceholder: string; baseUrl?: string; note: string }> = {
   openai: { keyPlaceholder: "sk-…", note: "Uses the OpenAI Responses API. GPT-5 / o-series ignore temperature automatically." },

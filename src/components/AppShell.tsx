@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useStore, type View } from "../lib/store";
 import { Logo } from "./ui";
-import { cn } from "../utils/cn";
+import { cn } from "@/lib/utils";
 
 const NAV: Array<{ id: View; label: string; icon: React.ReactNode; hint?: string }> = [
   { id: "dashboard", label: "Projects", icon: <LayoutDashboard size={17} /> },
