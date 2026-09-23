@@ -133,10 +133,10 @@ export default function LandingPage() {
   };
 
   const faqs = [
-    { q: "Is the generated code real and runnable?", a: "Yes. Every run produces a complete Next.js 16 + PostgreSQL codebase — package.json, Drizzle schema and migrations, typed API routes with Zod validation, pages, tests, Dockerfile and CI workflow. You can download it as a zip, push it to GitHub, and run npm install → db:push → dev." },
+    { q: "Is the generated code real and runnable?", a: "Yes. Every run produces a complete Next.js 16 + PostgreSQL codebase: package.json, Drizzle schema and migrations, typed API routes with Zod validation, pages, tests, Dockerfile and CI workflow. You can download it as a zip, push it to GitHub, and run npm install, db:push, then dev." },
     { q: "How do the human approval gates work?", a: "Two steps pause the pipeline by default: database migration and production deploy. You review the exact SQL diff or release plan, then approve or reject with an optional note. Rejected steps are skipped, approved steps resume automatically. You can enable auto-approve per project for trusted runs." },
     { q: "Which AI models power the agents?", a: "The orchestrator and architect default to a frontier reasoning model, while high-volume specialists (backend, frontend, testing) use fast, cheap models. The Model Catalog lists 12 supported models with context windows and per-token pricing, and every run tracks tokens and cost per agent." },
-    { q: "What are Skills and MCP servers?", a: "Skills are versioned knowledge packs (Next.js App Router, Drizzle, Zod, Tailwind v4…) that agents load per task. MCP servers are live tool integrations — filesystem, Postgres, GitHub, sandbox shell — that let agents read, write, migrate and execute inside an isolated workspace." },
+    { q: "What are Skills and MCP servers?", a: "Skills are versioned knowledge packs (Next.js App Router, Drizzle, Zod, Tailwind v4…) that agents load per task. MCP servers are live tool integrations (filesystem, Postgres, GitHub, sandbox shell) that let agents read, write, migrate and execute inside an isolated workspace." },
     { q: "Can I edit the generated code?", a: "Absolutely. The Files tab is a full code browser with syntax-highlighted viewing and in-place editing. Edits are versioned, and the terminal, database viewer and environment tabs stay in sync with the pipeline state." },
   ];
 
@@ -188,9 +188,8 @@ export default function LandingPage() {
               <span className="text-gradient">Seven agents build it.</span>
             </h1>
             <p className="mt-5 max-w-lg text-[16px] leading-relaxed text-ink-300">
-              Forge turns a plain-English brief into a deployable Next.js + PostgreSQL
-              codebase. An orchestrator plans the work, specialists write the schema,
-              API, UI, tests and infra — and you approve the risky steps before they happen.
+              Turn a plain-English brief into a deployable Next.js + PostgreSQL codebase,
+              with your approval on every risky step.
             </p>
             {/* Prompt-first CTA */}
             <div className="glass mt-7 flex items-center gap-2 rounded-xl p-2 pl-4">
@@ -206,11 +205,6 @@ export default function LandingPage() {
                 <Play size={14} /> Generate
               </button>
             </div>
-            <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-ink-400">
-              <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-emerald-400" /> Typed API + Zod validation</span>
-              <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-emerald-400" /> Drizzle schema & migrations</span>
-              <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-emerald-400" /> Human-in-the-loop gates</span>
-            </div>
             <div className="mt-7 flex gap-7">
               {stats.map((s) => (
                 <div key={s.label}>
@@ -225,7 +219,7 @@ export default function LandingPage() {
             <PipelineStrip />
             <div className="mt-3 flex items-center gap-2 text-[12px] text-ink-500">
               <ShieldCheck size={13} className="text-amber-300" />
-              Schema & deploy steps pause for your approval — nothing risky runs blind.
+              Schema and deploy steps pause for your approval. Nothing risky runs blind.
             </div>
           </div>
         </div>
@@ -236,13 +230,13 @@ export default function LandingPage() {
         <div className="reveal mx-auto max-w-2xl text-center">
           <div className="section-kicker"><Workflow size={12} /> How it works</div>
           <h2 className="mt-4 font-display text-[32px] font-bold tracking-tight sm:text-[38px]">From sentence to deploy in four moves</h2>
-          <p className="mt-3 text-[15px] text-ink-300">One pipeline, seven specialists, two approval gates. You watch it happen — or step in when it matters.</p>
+          <p className="mt-3 text-[15px] text-ink-300">One pipeline, seven specialists, two approval gates. You watch it happen, or step in when it matters.</p>
         </div>
         <div className="mt-10 grid gap-4 md:grid-cols-4">
           {[
             { icon: <Sparkles size={18} />, step: "01", title: "Describe", desc: "Write a brief or pick a preset. The orchestrator infers your domain, entities and feature set." },
             { icon: <GitBranch size={18} />, step: "02", title: "Plan", desc: "Work is decomposed into a 14-step task graph and assigned to specialist agents in order." },
-            { icon: <Bot size={18} />, step: "03", title: "Generate", desc: "Agents write schema, API, UI, tests and infra — streaming files, logs and commands live." },
+            { icon: <Bot size={18} />, step: "03", title: "Generate", desc: "Agents write schema, API, UI, tests and infra, streaming files, logs and commands live." },
             { icon: <ShieldCheck size={18} />, step: "04", title: "Approve & ship", desc: "Review the SQL diff and release plan at two gates, then deploy with one click." },
           ].map((c) => (
             <div key={c.step} className="reveal card card-hover p-5">
@@ -315,7 +309,7 @@ export default function LandingPage() {
             { icon: <ShieldCheck size={17} />, title: "Approval inbox", desc: "Risk-rated checkpoints with diffs, affected tables and one-click decisions." },
             { icon: <Boxes size={17} />, title: "Cost & tokens", desc: "Per-agent token usage, LLM call log and running cost down to the micro-dollar." },
           ].map((f) => (
-            <div key={f.title} className="reveal card card-hover flex gap-3.5 p-5">
+            <div key={f.title} className="reveal flex items-start gap-3.5 border-t border-white/[0.06] py-4">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.06] text-ink-200">{f.icon}</span>
               <div>
                 <div className="text-[14px] font-semibold">{f.title}</div>
@@ -335,8 +329,7 @@ export default function LandingPage() {
       <section id="presets" className="border-y border-white/[0.06] bg-white/[0.012]">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
           <div className="reveal mx-auto max-w-2xl text-center">
-            <div className="section-kicker"><Sparkles size={12} /> Start from a preset</div>
-            <h2 className="mt-4 font-display text-[32px] font-bold tracking-tight sm:text-[38px]">Six domains, tuned end to end</h2>
+            <h2 className="font-display text-[32px] font-bold tracking-tight sm:text-[38px]">Six domains, tuned end to end</h2>
             <p className="mt-3 text-[15px] text-ink-300">Each preset ships with entities, features and architecture packs the agents already understand.</p>
           </div>
           <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -358,8 +351,7 @@ export default function LandingPage() {
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <div className="reveal flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <div className="section-kicker"><Zap size={12} /> Model catalog</div>
-            <h2 className="mt-4 font-display text-[30px] font-bold tracking-tight">Pick the right brain per agent</h2>
+            <h2 className="font-display text-[30px] font-bold tracking-tight">Pick the right brain per agent</h2>
           </div>
           <button onClick={() => setView("models")} className="btn-secondary">Compare all {AI_MODELS.length} models <ArrowRight size={14} /></button>
         </div>
@@ -381,8 +373,7 @@ export default function LandingPage() {
       <section id="faq" className="border-t border-white/[0.06] bg-white/[0.012]">
         <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
           <div className="reveal text-center">
-            <div className="section-kicker">FAQ</div>
-            <h2 className="mt-4 font-display text-[30px] font-bold tracking-tight">Questions, answered</h2>
+            <h2 className="font-display text-[30px] font-bold tracking-tight">Questions, answered</h2>
           </div>
           <div className="mt-8 space-y-2.5">
             {faqs.map((f, i) => (
@@ -405,13 +396,13 @@ export default function LandingPage() {
           <h2 className="relative font-display text-[30px] font-bold tracking-tight sm:text-[36px]">Your next codebase is one sentence away.</h2>
           <p className="relative mx-auto mt-3 max-w-md text-[14.5px] text-ink-300">Spin up a project, watch seven agents build it, and approve the moments that matter.</p>
           <button onClick={() => setView("dashboard")} className="btn-primary relative mx-auto mt-6 px-7 py-3 text-[15px]">
-            Start building free <ArrowRight size={16} />
+            Start building <ArrowRight size={16} />
           </button>
         </div>
         <footer className="flex flex-col items-center justify-between gap-4 py-10 text-[12.5px] text-ink-500 sm:flex-row">
           <div className="flex items-center gap-2">
             <Logo size={26} />
-            <span className="font-semibold text-ink-300">Forge</span> — agentic full-stack code generation
+            <span className="font-semibold text-ink-300">Forge</span>, agentic full-stack code generation
           </div>
           <div className="flex gap-5">
             <button onClick={() => setView("dashboard")} className="hover:text-ink-300">Dashboard</button>

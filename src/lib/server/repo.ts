@@ -36,12 +36,26 @@ export function buildPlan(arch: Architecture): PlanStep[] {
   return steps.map((s, index) => ({ ...s, index }));
 }
 
+/** Fast plan for briefs that need a beautiful static website, not an app. */
+export function buildStaticPlan(): PlanStep[] {
+  const steps: Omit<PlanStep, "index">[] = [
+    { agent: "orchestrator", key: "brief", title: "Analyse the brief", description: "Extract the site type, audience, sections and tone from the brief." },
+    { agent: "orchestrator", key: "site-plan", title: "Plan the site", description: "Map pages, navigation, sections and content in docs/PLAN.md." },
+    { agent: "architect", key: "design-system", title: "Design the system", description: "Palette, type pairing, spacing and component styles in docs/ARCHITECTURE.md and styles.css." },
+    { agent: "architect", key: "static-scaffold", title: "Scaffold static site", description: "index.html, styles.css, script.js: semantic, accessible, responsive, zero dependencies." },
+    { agent: "frontend", key: "static-pages", title: "Build all pages", description: "About, services, contact, 404; forms, navigation and polished content sections." },
+    { agent: "testing", key: "static-quality", title: "Run quality gate", description: "Static analysis over every page: semantics, links, a11y basics, performance budget." },
+    { agent: "devops", key: "static-ship", title: "Ship", description: "netlify.toml, README and deploy instructions; zip-ready bundle." },
+  ];
+  return steps.map((s, index) => ({ ...s, index }));
+}
+
 // ─── Bootstrap / lifecycle ──────────────────────────────────────────────────
 
 export interface CreateProjectInput {
   name: string;
   prompt: string;
-  mode?: "greenfield" | "brownfield";
+  mode?: "greenfield" | "brownfield" | "static";
   emoji?: string;
   autoApprove?: boolean;
   engineMode: "llm" | "simulation";
@@ -54,7 +68,13 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
   const pid = input.id ?? id("prj");
   const pack = inferDomain(input.prompt);
   const arch = buildArchitecture(input.prompt, pack);
-  const plan = buildPlan(arch);
+  if (input.mode === "static") {
+    // Static sites: sections, not database entities; content comes from the brief itself.
+    arch.entities = [];
+    arch.overview = input.prompt.trim().replace(/\s+/g, " ");
+    arch.features = [];
+  }
+  const plan = input.mode === "static" ? buildStaticPlan() : buildPlan(arch);
   const now = new Date();
 
   return db.transaction(async (tx) => {
@@ -109,7 +129,7 @@ export async function resetProject(pid: string): Promise<Project | undefined> {
   const p = await getProject(pid);
   if (!p) return undefined;
   const arch = p.architecture ?? buildArchitecture(p.prompt, inferDomain(p.prompt));
-  const plan = buildPlan(arch);
+  const plan = p.mode === "static" ? buildStaticPlan() : buildPlan(arch);
   return db.transaction(async (tx) => {
     await tx.delete(fileNodes).where(eq(fileNodes.projectId, pid));
     await tx.delete(dbTables).where(eq(dbTables.projectId, pid));
@@ -137,7 +157,7 @@ export async function resetProject(pid: string): Promise<Project | undefined> {
     const [updated] = await tx.update(projects).set({
       status: "draft", plan, architecture: arch, currentStep: 0, totalSteps: plan.length, totalTasks: plan.length,
       completedTasks: 0, generatedFiles: 0, tokensIn: 0, tokensOut: 0, costMicros: 0, llmCalls: 0, toolCalls: 0,
-      repairIterations: 0, errorMessage: null, runId: null, runHeartbeatAt: null, pauseRequested: false,
+      repairIterations: 0, errorMessage: null, runId: null, runHeartbeatAt: null, pauseRequested: false, evalScore: null,
       startedAt: null, completedAt: null, updatedAt: new Date(),
     }).where(eq(projects.id, pid)).returning();
     return updated;
@@ -161,7 +181,6 @@ export async function duplicateProject(pid: string): Promise<Project | undefined
 
     const copyRows = async <T extends { id: string; projectId: string }>(table: Parameters<typeof tx.insert>[0], rows: T[], prefix: string, extra?: (r: T) => Partial<T>) => {
       if (!rows.length) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (tx.insert(table as any) as any).values(rows.map((r) => ({ ...r, ...(extra?.(r) ?? {}), id: id(prefix), projectId: copyId })));
     };
     await copyRows(tasks, await tx.select().from(tasks).where(eq(tasks.projectId, pid)), "tsk", (r) => ({ agentId: r.agentId ? agentIdMap.get(r.agentId) ?? null : null }));

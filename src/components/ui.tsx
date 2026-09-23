@@ -41,13 +41,45 @@ export function StatusBadge({ status, className }: { status: ProjectStatus; clas
 }
 
 // ─── Progress ───────────────────────────────────────────────────────────────
-export function Progress({ value, className, barClass }: { value: number; className?: string; barClass?: string }) {
+export function Progress({ value, className, barClass, color }: { value: number; className?: string; barClass?: string; color?: string }) {
   return (
     <div className={cn("h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]", className)}>
       <div
-        className={cn("h-full rounded-full bg-gradient-to-r from-violet-500 via-violet-400 to-cyan-400 transition-all duration-500", barClass)}
+        className={cn("h-full rounded-full bg-gradient-to-r from-violet-500 via-violet-400 to-cyan-400 transition-all duration-500", barClass, color)}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />
+    </div>
+  );
+}
+
+// ─── Empty state (route pages) ──────────────────────────────────────────────
+export function EmptyState({ icon: Icon, title, description, action }: {
+  icon?: React.ComponentType<{ size?: number | string; className?: string }>;
+  title: string; description?: string; action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-white/[0.015] px-6 py-12 text-center">
+      {Icon && <div className="mb-1 grid h-11 w-11 place-items-center rounded-xl bg-white/[0.05] text-ink-400"><Icon size={22} /></div>}
+      <div className="text-[14px] font-semibold text-ink-100">{title}</div>
+      {description && <div className="max-w-md text-[13px] leading-relaxed text-ink-400">{description}</div>}
+      {action && <div className="mt-3">{action}</div>}
+    </div>
+  );
+}
+
+// ─── Stat (route pages) ─────────────────────────────────────────────────────
+export function Stat({ label, value, sub, icon: Icon, accent }: {
+  label: string; value: React.ReactNode; sub?: string;
+  icon?: React.ComponentType<{ size?: number | string; className?: string }>; accent?: string;
+}) {
+  return (
+    <div className="panel p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-ink-500">{label}</span>
+        {Icon && <Icon size={15} className={cn("shrink-0 text-ink-400", accent)} />}
+      </div>
+      <div className="mt-2 font-display text-xl font-semibold tracking-tight text-ink-100">{value}</div>
+      {sub && <div className="mt-0.5 truncate text-[11.5px] text-ink-500">{sub}</div>}
     </div>
   );
 }
@@ -115,8 +147,8 @@ export function SectionCard({ title, subtitle, right, children, className }: {
 }
 
 // ─── Modal ──────────────────────────────────────────────────────────────────
-export function Modal({ open, onClose, title, subtitle, children, wide }: {
-  open: boolean; onClose: () => void; title: string; subtitle?: string; children: React.ReactNode; wide?: boolean;
+export function Modal({ open, onClose, title, subtitle, children, wide, width }: {
+  open: boolean; onClose: () => void; title: React.ReactNode; subtitle?: React.ReactNode; children: React.ReactNode; wide?: boolean; width?: string;
 }) {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -127,7 +159,7 @@ export function Modal({ open, onClose, title, subtitle, children, wide }: {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className={cn("glass relative max-h-[90vh] w-full overflow-y-auto rounded-2xl p-6", wide ? "max-w-2xl" : "max-w-lg")}>
+      <div className={cn("glass relative max-h-[90vh] w-full overflow-y-auto rounded-2xl p-6", width ?? (wide ? "max-w-2xl" : "max-w-lg"))}>
         <div className="mb-5">
           <h2 className="font-display text-[18px] font-semibold tracking-tight">{title}</h2>
           {subtitle && <p className="mt-1 text-[13px] text-ink-400">{subtitle}</p>}

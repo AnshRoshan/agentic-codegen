@@ -21,12 +21,14 @@ import {
   SkipForward,
   Terminal as TerminalIcon,
   Trash2,
+  Workflow,
 } from "lucide-react";
 import type { Agent, AgentMessage, CommandExecution, DbTable, EnvironmentVariable, HitlCheckpoint, LlmCall, Project, Task } from "@/db/schema";
 import { AppShell } from "@/components/AppShell";
 import { Progress, Spinner, StatusBadge, Toggle } from "@/components/ui";
 import { api, cn, formatCost, formatTokens, RUNNING_STATUSES } from "@/lib/utils";
 import { AgentsPanel } from "./AgentsPanel";
+import { RunDock } from "./RunDock";
 import { OverviewTab } from "./OverviewTab";
 import { FilesTab } from "./FilesTab";
 import { DatabaseTab } from "./DatabaseTab";
@@ -53,12 +55,12 @@ export interface WorkspaceData {
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
+  { id: "pipeline", label: "Pipeline", icon: Workflow },
   { id: "files", label: "Files", icon: FileCode2 },
   { id: "database", label: "Database", icon: Database },
   { id: "env", label: "Environment", icon: KeyRound },
   { id: "checkpoints", label: "Approvals", icon: ShieldCheck },
   { id: "terminal", label: "Terminal", icon: TerminalIcon },
-  { id: "activity", label: "Activity", icon: Activity },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -246,14 +248,9 @@ export function Workspace({ id }: { id: string }) {
   const currentStep = project.plan?.[project.currentStep];
 
   return (
-    <AppShell
-      right={
-        <button className="btn-secondary btn-sm" onClick={() => setSearchOpen(true)} title="Search code (⌘K)">
-          <Search size={13} /> <span className="hidden sm:inline">Search code</span> <span className="kbd ml-1 hidden sm:inline-flex">⌘K</span>
-        </button>
-      }
-    >
+    <AppShell hideTopBar>
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} projectId={id} onOpenFile={(p) => { setOpenFile(p); setTab("files"); setSearchOpen(false); }} />
+      <div className="flex min-h-full flex-col">
 
       {/* Header */}
       <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -274,6 +271,9 @@ export function Workspace({ id }: { id: string }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button className="btn-secondary btn-sm" onClick={() => setSearchOpen(true)} title="Search code (⌘K)">
+            <Search size={13} /> <span className="hidden sm:inline">Search code</span> <span className="kbd ml-1 hidden sm:inline-flex">⌘K</span>
+          </button>
           <Toggle checked={project.autoApprove} onChange={toggleAuto} label="Auto-approve" />
           <span className="mx-1 h-6 w-px bg-white/10" />
           {running ? (
@@ -293,39 +293,7 @@ export function Workspace({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Progress strip */}
-      <div className="panel mb-5 flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center">
-        <div className="flex-1">
-          <div className="mb-1.5 flex items-center justify-between text-xs">
-            <span className="text-ink-300">
-              {isRunning && currentStep ? (
-                <span className="flex items-center gap-2"><Spinner className="h-3 w-3" /> Step {project.currentStep + 1}/{project.totalSteps} · {currentStep.title}</span>
-              ) : project.status === "waiting_approval" ? (
-                <span className="text-amber-300">Paused at step {project.currentStep}/{project.totalSteps} — waiting for your approval</span>
-              ) : project.status === "completed" ? (
-                <span className="text-mint-400">All {project.totalSteps} steps complete</span>
-              ) : project.status === "failed" ? (
-                <span className="text-rose-400">Failed: {project.errorMessage}</span>
-              ) : (
-                <span>{project.currentStep === 0 ? "Ready to start" : `Paused at step ${project.currentStep}/${project.totalSteps}`}</span>
-              )}
-            </span>
-            <span className="font-mono text-ink-400">{pct}%</span>
-          </div>
-          <Progress value={pct} color={project.status === "completed" ? "bg-mint-400" : project.status === "failed" ? "bg-rose-400" : "bg-gradient-to-r from-brand-500 to-accent-400"} />
-        </div>
-        <div className="grid grid-cols-4 gap-4 text-xs md:border-l md:border-white/8 md:pl-5">
-          <div><div className="text-ink-500">Files</div><div className="font-display text-base font-semibold">{project.generatedFiles}</div></div>
-          <div><div className="text-ink-500">Tasks</div><div className="font-display text-base font-semibold">{project.completedTasks}/{project.totalTasks || project.totalSteps}</div></div>
-          <div><div className="text-ink-500">Tokens</div><div className="font-display text-base font-semibold">{formatTokens(project.tokensIn + project.tokensOut)}</div></div>
-          <div><div className="text-ink-500">Cost</div><div className="font-display text-base font-semibold text-mint-400">{formatCost(project.costMicros)}</div></div>
-        </div>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
-        <AgentsPanel agents={data.agents} tasks={data.tasks} plan={project.plan ?? []} currentStep={project.currentStep} status={project.status} />
-
-        <section className="min-w-0">
+      <section className="min-w-0">
           <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-white/8 bg-ink-900/60 p-1">
             {TABS.map((t) => {
               const count = t.id === "files" ? data.files.length : t.id === "database" ? data.tables.length : t.id === "env" ? data.env.length : t.id === "checkpoints" ? pendingCheckpoints.length : t.id === "terminal" ? data.commands.length : 0;
@@ -339,13 +307,22 @@ export function Workspace({ id }: { id: string }) {
           </div>
 
           {tab === "overview" && <OverviewTab data={data} onGoTo={(t) => setTab(t as TabId)} />}
+          {tab === "pipeline" && <AgentsPanel agents={data.agents} tasks={data.tasks} plan={project.plan ?? []} currentStep={project.currentStep} status={project.status} />}
           {tab === "files" && <FilesTab projectId={id} files={data.files} openPath={openFile} onOpen={setOpenFile} />}
           {tab === "database" && <DatabaseTab tables={data.tables} />}
           {tab === "env" && <EnvTab projectId={id} env={data.env} onChange={refresh} />}
           {tab === "checkpoints" && <CheckpointsTab checkpoints={data.checkpoints} onResolve={resolve} autoApprove={project.autoApprove} />}
           {tab === "terminal" && <TerminalTab commands={data.commands} />}
-          {tab === "activity" && <ActivityTab messages={data.messages} llmCalls={data.llmCalls} onOpenFile={(p) => { setOpenFile(p); setTab("files"); }} />}
-        </section>
+      </section>
+
+        <RunDock
+          project={project}
+          currentStep={currentStep}
+          isRunning={isRunning}
+          messages={data.messages}
+          llmCalls={data.llmCalls}
+          onOpenFile={(p) => { setOpenFile(p); setTab("files"); }}
+        />
       </div>
     </AppShell>
   );

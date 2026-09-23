@@ -142,7 +142,7 @@ function GlobalPalette({ open, onClose, onNew }: { open: boolean; onClose: () =>
   );
 }
 
-export default function AppShell({ children, onNew }: { children: React.ReactNode; onNew?: () => void }) {
+export function AppShell({ children, onNew, right, hideTopBar }: { children: React.ReactNode; onNew?: () => void; right?: React.ReactNode; hideTopBar?: boolean }) {
   const { view, setView, projects, activeId, setActiveId, setWtab, toast } = useStore();
   const [modal, setModal] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -231,6 +231,7 @@ export default function AppShell({ children, onNew }: { children: React.ReactNod
 
       {/* ── Main ── */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {!hideTopBar && (
         <div className="flex h-[60px] shrink-0 items-center gap-3 border-b border-white/[0.07] bg-panel/60 px-5 backdrop-blur">
           <button onClick={() => setPalette(true)} className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-ink-500 transition hover:bg-white/[0.04] hover:text-ink-300">
             <Search size={15} className="shrink-0" />
@@ -242,8 +243,10 @@ export default function AppShell({ children, onNew }: { children: React.ReactNod
               <span className="status-dot bg-emerald-400" data-live="true" /> orchestrator online
             </span>
             <button onClick={openModal} className="btn-secondary btn-sm"><Plus size={14} /> New</button>
+            {right}
           </div>
         </div>
+        )}
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
 
@@ -260,3 +263,4 @@ export default function AppShell({ children, onNew }: { children: React.ReactNod
     </div>
   );
 }
+export default AppShell;

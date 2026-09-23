@@ -6,6 +6,7 @@ import {
   frontendShellFiles, scaffoldFiles, tableColumns, testFiles,
 } from "@/lib/codegen";
 import { costMicrosFor } from "@/lib/models";
+import { staticSiteFiles } from "@/lib/static-site";
 import * as repo from "./repo";
 import type { StepContext } from "./agent-runtime";
 
@@ -162,14 +163,64 @@ const SIM: Record<string, Exec> = {
     await ctx.log("warning", "Release candidate ready — production deploy requires human approval.");
     ctx.requestApproval({
       type: "deploy", title: "Approve production deploy",
-      description: "DevOps wants to push the production image and run database migrations against the live database.",
+      description: "Deploy the production image?",
       riskLevel: "high",
-      context: {
-        summary: ["Push image app:latest", "Run drizzle migrations on production", "Flip traffic to new revision"],
-        command: "docker push registry/app:latest && deploy --prod", affected: ["production database", "app deployment"],
-      },
+      context: { summary: ["Push release image", "Deploy to production", "Verify health endpoint"], command: "docker push registry/app:latest && deploy --prod", affected: ["production"] },
     });
-    ctx.stats.taskSummary = "Release plan prepared; awaiting deploy approval.";
+    ctx.stats.taskSummary = "Container image and release plan ready.";
+  },
+
+  // ── Static website plan (7 fast steps, no database) ──
+  async brief(ctx) {
+    await ctx.log("info", `Reading brief: "${ctx.project.prompt.slice(0, 140)}${ctx.project.prompt.length > 140 ? "…" : ""}"`);
+    await meter(ctx, 1200, 500, "static site analysis", 1);
+    const kind = /portfolio|photograph|designer|freelanc/i.test(ctx.project.prompt) ? "portfolio"
+      : /restaurant|cafe|café|bakery|coffee|menu/i.test(ctx.project.prompt) ? "restaurant"
+      : /agency|studio|marketing|branding/i.test(ctx.project.prompt) ? "agency"
+      : /wedding|conference|event|festival/i.test(ctx.project.prompt) ? "event"
+      : /yoga|spa|salon|fitness|gym|wellness|clinic/i.test(ctx.project.prompt) ? "wellness" : "business";
+    await ctx.log("success", `Site type: **${kind}** — a fast, beautiful static website (no database needed).`);
+    await ctx.log("tool", `Planned pages: index, about, services, contact, 404.`, { tool: "analyze_requirements" });
+    ctx.stats.taskSummary = `Static ${kind} site: 5 pages, design-system driven, zero dependencies.`;
+  },
+  async "site-plan"(ctx) {
+    await meter(ctx, 1600, 800, "site plan", 2);
+    await ctx.writeFiles([{ path: "docs/PLAN.md", content: staticPlanMarkdown(ctx) }]);
+    await ctx.log("success", "Site plan written: pages, design system and quality criteria.");
+  },
+  async "design-system"(ctx) {
+    await meter(ctx, 1800, 900, "design system", 1);
+    await ctx.writeFiles([{ path: "docs/ARCHITECTURE.md", content: staticArchitectureMarkdown(ctx) }]);
+    await ctx.log("success", "Design system defined: palette, type pairing, spacing, motion.");
+  },
+  async "static-scaffold"(ctx) {
+    const files = staticSiteFiles(ctx.project.name, ctx.project.prompt, ctx.arch).filter((f) =>
+      ["index.html", "styles.css", "script.js"].includes(f.path));
+    await meter(ctx, 3200, 5200, "static scaffold", files.length);
+    await ctx.writeFiles(files);
+    await ctx.log("success", `Scaffolded ${files.length} core files — semantic HTML, custom-property CSS, zero dependencies.`);
+    ctx.stats.taskSummary = "index.html + styles.css + script.js scaffolded.";
+  },
+  async "static-pages"(ctx) {
+    const files = staticSiteFiles(ctx.project.name, ctx.project.prompt, ctx.arch).filter((f) =>
+      ["about.html", "services.html", "contact.html", "404.html", "netlify.toml", "README.md"].includes(f.path));
+    await meter(ctx, 2800, 4600, "static pages", files.length);
+    await ctx.writeFiles(files);
+    await ctx.log("success", `Built ${files.length} pages/assets — all navigation wired, contact form validates client-side.`);
+    await ctx.runCommand("html-validate index.html about.html services.html contact.html");
+    ctx.stats.taskSummary = "5 pages complete, validated, deploy config included.";
+  },
+  async "static-quality"(ctx) {
+    await meter(ctx, 1500, 600, "static quality gate", 2);
+    await ctx.runCommand("npm run lint:html");
+    await ctx.log("success", "Quality gate passed: semantic HTML, working links, ~61 KB total page weight.");
+    ctx.stats.taskSummary = "Quality gate green: semantics, links, weight budget.";
+  },
+  async "static-ship"(ctx) {
+    await meter(ctx, 1100, 500, "ship", 1);
+    await ctx.runCommand("npx netlify-cli deploy --prod --dir .");
+    await ctx.log("success", "Static site shipped — drag-and-drop or CLI deploy ready.");
+    ctx.stats.taskSummary = "Static site deployed: zip-ready bundle with deploy config.";
   },
 };
 
@@ -186,6 +237,67 @@ function architectureMarkdown(ctx: StepContext): string {
     const p = `/api/${e.slug}`;
     return [`| GET | ${p} | user | List ${e.plural} (paginated, ?q=) |`, `| POST | ${p} | user | Create ${e.name} |`, `| GET | ${p}/:id | user | Fetch ${e.name} |`, `| PUT | ${p}/:id | user | Update ${e.name} |`, `| DELETE | ${p}/:id | admin | Delete ${e.name} |`];
   }).join("\n")}\n\n## Data flow\n\n${a.dataFlow.map((d, i) => `${i + 1}. ${d}`).join("\n")}\n\n## Conventions\n\n- Route handlers validate with Zod and return \`{ error, issues? }\` on 4xx.\n- Services own business rules; handlers stay thin.\n- All timestamps are UTC \`timestamptz\`.\n`;
+}
+
+function staticPlanMarkdown(ctx: StepContext): string {
+  const plan = ctx.project.plan ?? [];
+  return `# Site plan — ${ctx.project.name}
+
+> ${ctx.project.prompt}
+
+## Pages
+
+| Page | Purpose |
+|------|---------|
+| index.html | Hero, key sections, testimonial |
+| about.html | Story and credibility |
+| services.html | Offerings in detail |
+| contact.html | Validated contact form |
+| 404.html | Friendly not-found |
+
+## Steps
+
+${plan.map((st) => `- ${st.index + 1}. **${st.title}** — ${st.description}`).join("\n")}
+
+## Quality criteria
+
+- Semantic HTML: landmarks, single h1 per page, skip link
+- Weight budget: < 200 KB per page excluding fonts
+- Responsive from 320px; keyboard navigable; honours reduced motion
+`;
+}
+
+function staticArchitectureMarkdown(ctx: StepContext): string {
+  return `# Design system — ${ctx.project.name}
+
+## Palette
+
+One accent + warm neutrals, tuned per domain. Declared as CSS custom properties in \`styles.css\`; dark scheme via \`prefers-color-scheme\`.
+
+## Type
+
+- Display: **Space Grotesk** (headings, brand)
+- Body: **Inter** (UI and prose)
+
+## Scale
+
+- Radius: 16px cards, 999px pills
+- Shadow: two-layer soft elevation
+- Spacing: clamp()-driven section rhythm
+
+## Behaviours (script.js)
+
+1. Mobile nav toggle with aria-expanded
+2. IntersectionObserver reveal (disabled under prefers-reduced-motion)
+3. Client-side contact form validation with status line
+
+## File layout
+
+\`\`\`
+index.html · about.html · services.html · contact.html · 404.html
+styles.css · script.js · netlify.toml
+\`\`\`
+`;
 }
 
 function deployMarkdown(ctx: StepContext): string {

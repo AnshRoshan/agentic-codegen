@@ -346,6 +346,49 @@ export interface StepSpec {
 }
 
 export const STEP_SPECS: Record<string, StepSpec> = {
+  // ── Static website plan (mode === "static", 7 fast steps) ──
+  brief: {
+    statusAfter: "planning",
+    instructions: `Read the brief and derive the static website spec: site kind (portfolio, restaurant, agency, event, wellness, business), audience, tone, the 4 nav pages and 2-3 content sections with concrete items. Call update_architecture with an EMPTY entities array and a features array of 4-6 concrete section items. Then call complete_task.`,
+    verify: ({ arch }) => (arch.features.length >= 3 ? [] : ["architecture features must list at least 3 content items"]),
+  },
+  "site-plan": {
+    statusAfter: "generating",
+    instructions: `Write docs/PLAN.md mapping each static-site step to deliverables: pages (index/about/services/contact/404), the design system, and quality criteria (Lighthouse-worthy: semantics, alt text, no render-blocking beyond fonts). Then call complete_task.`,
+    verify: ({ files }) => (files.some((f) => f.path === "docs/PLAN.md") ? [] : ["docs/PLAN.md must exist"]),
+  },
+  "design-system": {
+    statusAfter: "building",
+    instructions: `Write docs/ARCHITECTURE.md describing the design system: colour palette (one accent + neutrals), display/body font pairing, radius and shadow scale, and the file layout (styles.css custom properties, script.js behaviours). Optionally refine via update_architecture. Then call complete_task.`,
+    verify: ({ files }) => (files.some((f) => f.path === "docs/ARCHITECTURE.md") ? [] : ["docs/ARCHITECTURE.md must exist"]),
+  },
+  "static-scaffold": {
+    statusAfter: "building",
+    instructions: `Create the static site scaffold: index.html (semantic landmarks: header/nav/main/footer, hero + first sections), styles.css (custom-property design system, responsive grid, cards, buttons, reveal transitions, prefers-color-scheme dark support, prefers-reduced-motion respect), script.js (mobile nav toggle, IntersectionObserver reveal, form validation). No frameworks, no build step. Then call complete_task.`,
+    verify: ({ files }) => {
+      const need = ["index.html", "styles.css", "script.js"];
+      return need.filter((f) => !files.some((x) => x.path === f)).map((f) => `${f} must exist`);
+    },
+  },
+  "static-pages": {
+    statusAfter: "building",
+    instructions: `Complete the site: about.html, services.html, contact.html (working validated form), 404.html. Share the same header/footer/nav; add netlify.toml and README.md with deploy instructions. Then call complete_task.`,
+    verify: ({ files }) => {
+      const need = ["about.html", "services.html", "contact.html", "404.html", "README.md"];
+      return need.filter((f) => !files.some((x) => x.path === f)).map((f) => `${f} must exist`);
+    },
+  },
+  "static-quality": {
+    statusAfter: "testing",
+    instructions: `Run the quality gate: check every page for semantic HTML (single h1, landmarks, skip link), working internal links, form validation, and total page weight under 200 KB excluding fonts. Fix anything flagged, then call complete_task with a summary.`,
+    verify: ({ files, commands }) => (commands.length >= 1 && files.length >= 5 ? [] : ["quality command must have run over a complete site"]),
+  },
+  "static-ship": {
+    statusAfter: "completed",
+    instructions: `Finalise the bundle: verify netlify.toml and README deploy instructions, log the deploy summary, and call complete_task.`,
+    verify: ({ files }) => (files.some((f) => f.path === "netlify.toml") ? [] : ["netlify.toml must exist"]),
+  },
+
   analyze: {
     statusAfter: "planning",
     instructions: `Read the product brief carefully. Produce a refined architecture using update_architecture: 4-8 entities with realistic typed fields (include status enums, foreign keys via "reference" type + references, money as decimal, timestamps as datetime), 5-8 concrete features, and a 2-3 sentence overview. Every entity must include a "User" entity if the app has accounts. Then call complete_task with a summary of the domain and key decisions.`,

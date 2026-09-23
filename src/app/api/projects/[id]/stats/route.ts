@@ -34,8 +34,9 @@ export async function GET(
       db.select().from(hitlCheckpoints).where(eq(hitlCheckpoints.projectId, id)),
     ]);
 
-  const filesOnly = allFiles.filter((f) => f.type === "file");
+  const filesOnly = allFiles;
   const totalBytes = filesOnly.reduce((sum, f) => sum + (f.size ?? 0), 0);
+  const directoryCount = new Set(filesOnly.map((f) => f.path.split("/").slice(0, -1).join("/")).filter(Boolean)).size;
 
   // Language breakdown
   const languageMap: Record<string, number> = {};
@@ -84,7 +85,7 @@ export async function GET(
     },
     files: {
       total: filesOnly.length,
-      directories: allFiles.filter((f) => f.type === "directory").length,
+      directories: directoryCount,
       totalBytes,
       totalKb: Math.round(totalBytes / 1024),
       languages,
@@ -109,7 +110,6 @@ export async function GET(
     env: {
       total: allEnvVars.length,
       secrets: allEnvVars.filter((e) => e.isSecret).length,
-      vaultRefs: allEnvVars.filter((e) => e.type === "vault_ref").length,
     },
     hitl: {
       total: allHitl.length,

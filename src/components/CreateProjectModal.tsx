@@ -13,7 +13,7 @@ export function CreateProjectModal({ open, onClose, presetId }: { open: boolean;
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [name, setName] = useState("");
-  const [mode, setMode] = useState<"greenfield" | "brownfield">("greenfield");
+  const [mode, setMode] = useState<"greenfield" | "brownfield" | "static">("greenfield");
   const [autoApprove, setAutoApprove] = useState(false);
   const [autoStart, setAutoStart] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -96,8 +96,8 @@ export function CreateProjectModal({ open, onClose, presetId }: { open: boolean;
             <div>
               <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-ink-400">Mode</label>
               <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-ink-900 p-1">
-                {(["greenfield", "brownfield"] as const).map((m) => (
-                  <button key={m} type="button" onClick={() => setMode(m)} className={cn("rounded-lg py-1.5 text-xs font-medium capitalize transition", mode === m ? "bg-white/10 text-ink-100" : "text-ink-400 hover:text-ink-200")}>
+                {(["greenfield", "brownfield", "static"] as const).map((m) => (
+                  <button key={m} type="button" onClick={() => setMode(m)} title={m === "static" ? "A beautiful static website: 7 fast steps, no database" : undefined} className={cn("rounded-lg py-1.5 text-xs font-medium capitalize transition", mode === m ? "bg-white/10 text-ink-100" : "text-ink-400 hover:text-ink-200")}>
                     {m}
                   </button>
                 ))}

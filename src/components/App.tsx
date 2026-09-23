@@ -16,7 +16,7 @@ function Shell() {
   if (view === "landing") return <LandingPage />;
 
   return (
-    <AppShell onNew={() => setModal(true)}>
+    <AppShell onNew={() => setModal(true)} hideTopBar={view === "workspace"}>
       {view === "dashboard" && <DashboardPage onNew={() => setModal(true)} />}
       {view === "workspace" && <WorkspacePage />}
       {view === "models" && <ModelsPage />}

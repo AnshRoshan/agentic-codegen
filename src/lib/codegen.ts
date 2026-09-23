@@ -129,6 +129,7 @@ export function scaffoldFiles(projectName: string, arch: Architecture): Generate
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^22",
+    "@types/pg": "^8",
     "@types/react": "^19",
     "drizzle-kit": "^0.31.10",
     "tailwindcss": "^4.1.17",
@@ -155,7 +156,6 @@ export function scaffoldFiles(projectName: string, arch: Architecture): Generate
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  experimental: { typedRoutes: true },
 };
 
 export default nextConfig;`),
@@ -190,18 +190,52 @@ export default function Home() {
     file("src/app/globals.css", `@import "tailwindcss";
 
 @theme {
-  --color-brand-500: oklch(0.72 0.19 264);
-  --color-brand-600: oklch(0.62 0.21 264);
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-300: oklch(0.82 0.13 264);
+  --color-brand-400: oklch(0.76 0.16 266);
+  --color-brand-500: oklch(0.7 0.19 268);
+  --color-brand-600: oklch(0.62 0.2 270);
+  --color-surface: oklch(0.17 0.012 265);
+  --color-surface-2: oklch(0.21 0.014 265);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(70rem 34rem at 78% -12%, oklch(0.7 0.19 268 / 0.09), transparent 60%),
+    radial-gradient(46rem 26rem at -8% 8%, oklch(0.72 0.15 205 / 0.05), transparent 55%),
+    oklch(0.135 0.008 265);
+  background-attachment: fixed;
+}
 
 .card {
-  @apply rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm;
+  @apply rounded-2xl border border-white/[0.07] bg-surface/80 p-5 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset];
 }
-.btn { @apply inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition; }
-.btn-primary { @apply btn bg-brand-500 text-white hover:bg-brand-600; }`),
+.card-hover { @apply transition duration-200 hover:border-brand-500/40 hover:bg-surface-2/80; }
+
+.btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-[0.98]; }
+.btn-primary {
+  @apply btn text-white;
+  background: linear-gradient(135deg, var(--color-brand-400), var(--color-brand-600));
+  box-shadow: 0 4px 14px oklch(0.7 0.19 268 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { @apply btn border border-white/10 text-zinc-300 hover:border-white/25 hover:text-white; }
+.btn-danger { @apply btn border border-rose-500/30 text-rose-300 hover:bg-rose-500/10; }
+
+.input {
+  @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-500;
+}
+.input:focus { @apply border-brand-400/60 ring-2 ring-brand-500/25; }
+
+.chip { @apply inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-0.5 text-xs text-zinc-300; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.12); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgb(255 255 255 / 0.2); border: 2px solid transparent; background-clip: content-box; }`),
     file("src/lib/utils.ts", `export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -278,7 +312,11 @@ export type New${e.name} = typeof ${camel(e.plural)}.$inferInsert;`
     const rows = [0, 1, 2].map((i) =>
       `    { id: nanoid(), ${e.fields.map((fld) => `${fld.name}: ${sampleValue(fld, i + ei)}`).join(", ")} }`
     ).join(",\n");
-    return `  const ${camel(e.plural)}Rows = [\n${rows}\n  ];\n  await db.insert(${camel(e.plural)}).values(${camel(e.plural)}Rows);\n  console.log("  ✔ ${snake(e.plural)}: ${camel(e.plural)}Rows.length} rows");`;
+    return `  const ${camel(e.plural)}Rows: New${e.name}[] = [
+${rows}
+  ];
+  await db.insert(${camel(e.plural)}).values(${camel(e.plural)}Rows);
+  console.log("  ✔ ${snake(e.plural)}: " + ${camel(e.plural)}Rows.length + " rows");`;
   });
 
   return [
@@ -295,6 +333,7 @@ ${tables.join("\n\n")}`),
     file("src/db/seed.ts", `import { nanoid } from "nanoid";
 import { db } from "./index";
 import { ${arch.entities.map((e) => camel(e.plural)).join(", ")} } from "./schema";
+import type { ${arch.entities.map((e) => "New" + e.name).join(", ")} } from "./schema";
 
 async function main() {
 ${arch.entities.map((e) => `  const ${camel(e.name)}Ids = ["${e.slug}-1", "${e.slug}-2", "${e.slug}-3"];`).join("\n")}
@@ -433,6 +472,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 // ─── Frontend shell ─────────────────────────────────────────────────────────
 export function frontendShellFiles(projectName: string, arch: Architecture): GeneratedFile[] {
   const nav = arch.entities.map((e) => `    { href: "/dashboard/${e.slug}", label: "${titleCase(e.plural)}" },`).join("\n");
+  const countImports = arch.entities.filter((x) => x.name !== "User").map((e) => `  ${camel(e.plural)},`).join("\n");
+  const countLines = arch.entities.filter((x) => x.name !== "User").map((e) => `  const ${camel(e.plural)}Count = await db.$count(${camel(e.plural)});`).join("\n");
+  const statTiles = arch.entities.filter((x) => x.name !== "User").slice(0, 4).map((e) => `    { label: "${titleCase(e.plural)}", value: ${camel(e.plural)}Count, href: "/dashboard/${e.slug}" },`).join("\n");
+  const cards = arch.entities.filter((x) => x.name !== "User").map((e) => `    { title: "${titleCase(e.plural)}", href: "/dashboard/${e.slug}", count: ${camel(e.plural)}Count, desc: "Browse, create and manage ${e.slug.replace(/-/g, " ")} records." },`).join("\n");
   return [
     file("src/components/AppShell.tsx", `"use client";
 import Link from "next/link";
@@ -447,40 +490,80 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
     <div className="flex min-h-screen">
-      <aside className="w-60 shrink-0 border-r border-zinc-800 bg-zinc-900/50 p-4">
-        <Link href="/dashboard" className="mb-6 block text-lg font-bold">${projectName}</Link>
+      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-white/[0.07] bg-surface/60 p-4 backdrop-blur md:flex">
+        <Link href="/dashboard" className="mb-7 flex items-center gap-2.5 px-2">
+          <span className="grid h-9 w-9 place-items-center rounded-xl text-sm font-black text-white" style={{ background: "linear-gradient(135deg, var(--color-brand-400), var(--color-brand-600))" }}>
+            "${projectName.slice(0, 1).toUpperCase()}"
+          </span>
+          <span className="text-[15px] font-bold tracking-tight">${projectName}</span>
+        </Link>
         <nav className="space-y-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={\`block rounded-lg px-3 py-2 text-sm \${pathname === item.href ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/5"}\`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {NAV.map((item) => {
+            const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            return (
+              <Link key={item.href} href={item.href}
+                className={\`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition \${active ? "bg-brand-500/15 text-white ring-1 ring-brand-500/30" : "text-zinc-400 hover:bg-white/[0.05] hover:text-white"}\`}>
+                <span className={\`h-1.5 w-1.5 rounded-full \${active ? "bg-brand-400" : "bg-zinc-600"}\`} />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
+        <div className="mt-auto rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 text-[11px] leading-relaxed text-zinc-500">
+          Built with Next.js, PostgreSQL and Drizzle. Data flows through typed API routes with Zod validation.
+        </div>
       </aside>
-      <main className="flex-1 p-8">{children}</main>
+      <div className="flex min-h-screen flex-1 flex-col md:pl-60">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/[0.07] bg-surface/70 px-5 backdrop-blur md:hidden">
+          <span className="text-[15px] font-bold">${projectName}</span>
+          <nav className="ml-auto flex gap-1 overflow-x-auto">
+            {NAV.map((item) => (
+              <Link key={item.href} href={item.href} className={\`rounded-lg px-2.5 py-1.5 text-xs \${pathname === item.href ? "bg-white/10 text-white" : "text-zinc-400"}\`}>{item.label}</Link>
+            ))}
+          </nav>
+        </header>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">{children}</main>
+      </div>
     </div>
   );
 }`),
-    file("src/components/DataTable.tsx", `interface Column<T> { key: keyof T & string; label: string; render?: (row: T) => React.ReactNode; }
+    file("src/components/DataTable.tsx", `import Link from "next/link";
 
-export function DataTable<T extends { id: string }>({ rows, columns, empty }: { rows: T[]; columns: Column<T>[]; empty: string }) {
+interface Column<T> { key: keyof T & string; label: string; format?: "date" | "money" | "text"; }
+
+export function DataTable<T extends { id: string }>({ rows, columns, empty, hrefBase }: {
+  rows: T[]; columns: Column<T>[]; empty: string; hrefBase?: string;
+}) {
   if (rows.length === 0) {
-    return <div className="rounded-xl border border-dashed border-zinc-700 p-10 text-center text-sm text-zinc-500">{empty}</div>;
+    return (
+      <div className="rounded-2xl border border-dashed border-white/12 px-6 py-14 text-center">
+        <div className="text-sm font-semibold text-zinc-300">{empty}</div>
+        <div className="mt-1 text-xs text-zinc-500">Use the button in the top-right to add the first one.</div>
+      </div>
+    );
   }
+  const cell = (row: T, c: Column<T>) => {
+    const v = row[c.key];
+    if (v == null || v === "") return "—";
+    if (c.format === "date") return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(String(v)));
+    if (c.format === "money") return new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(Number(v));
+    return String(v);
+  };
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-800">
+    <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-surface/60">
       <table className="w-full text-sm">
-        <thead className="bg-zinc-900 text-left text-xs uppercase tracking-wider text-zinc-500">
-          <tr>{columns.map((c) => <th key={c.key} className="px-4 py-3">{c.label}</th>)}</tr>
+        <thead className="bg-white/[0.04] text-left text-[11px] uppercase tracking-wider text-zinc-500">
+          <tr>{columns.map((c) => <th key={c.key} className="px-4 py-3 font-semibold">{c.label}</th>)}{hrefBase && <th className="px-4 py-3" />}</tr>
         </thead>
-        <tbody className="divide-y divide-zinc-800">
+        <tbody className="divide-y divide-white/[0.05]">
           {rows.map((row) => (
-            <tr key={row.id} className="hover:bg-white/[0.02]">
-              {columns.map((c) => <td key={c.key} className="px-4 py-3">{c.render ? c.render(row) : String(row[c.key] ?? "—")}</td>)}
+            <tr key={row.id} className="transition hover:bg-white/[0.03]">
+              {columns.map((c) => <td key={c.key} className="px-4 py-3 text-zinc-200">{cell(row, c)}</td>)}
+              {hrefBase && (
+                <td className="px-4 py-3 text-right">
+                  <Link href={\`\${hrefBase}/\${row.id}\`} className="text-[13px] font-medium text-brand-300 hover:text-brand-200">Edit</Link>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -493,24 +576,55 @@ export function DataTable<T extends { id: string }>({ rows, columns, empty }: { 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return <AppShell>{children}</AppShell>;
 }`),
-    file("src/app/dashboard/page.tsx", `import Link from "next/link";
-
-const CARDS = [
-${arch.entities.map((e) => `  { title: "${titleCase(e.plural)}", href: "/dashboard/${e.slug}", desc: "Manage ${e.slug.replace(/-/g, " ")}" },`).join("\n")}
-];
-
-export default function Dashboard() {
+    file("src/app/dashboard/loading.tsx", `export default function Loading() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Overview</h1>
-        <p className="text-sm text-zinc-400">${arch.overview}</p>
+    <div className="animate-pulse space-y-5">
+      <div className="h-8 w-48 rounded-lg bg-white/[0.06]" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-2xl bg-white/[0.04]" />)}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {CARDS.map((c) => (
-          <Link key={c.href} href={c.href} className="card transition hover:border-zinc-600">
-            <div className="font-semibold">{c.title}</div>
-            <div className="mt-1 text-sm text-zinc-400">{c.desc}</div>
+      <div className="h-64 rounded-2xl bg-white/[0.04]" />
+    </div>
+  );
+}`),
+    file("src/app/dashboard/page.tsx", `import Link from "next/link";
+import { db } from "@/db";
+import {
+${countImports}
+} from "@/db/schema";
+
+export const dynamic = "force-dynamic";
+
+export default async function Dashboard() {
+${countLines}
+  const stats = [
+${statTiles}
+  ];
+  const cards = [
+${cards}
+  ];
+  return (
+    <div className="space-y-7">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Overview</h1>
+        <p className="mt-1 max-w-2xl text-sm text-zinc-400">${arch.overview.replace(/"/g, "&quot;")}</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((s) => (
+          <Link key={s.href} href={s.href} className="card card-hover">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{s.label}</div>
+            <div className="mt-2 text-3xl font-bold tabular-nums">{s.value}</div>
+          </Link>
+        ))}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {cards.map((c) => (
+          <Link key={c.href} href={c.href} className="card card-hover group flex items-center justify-between">
+            <div>
+              <div className="font-semibold">{c.title} <span className="ml-1 text-xs font-normal text-zinc-500">{c.count}</span></div>
+              <div className="mt-1 text-sm text-zinc-400">{c.desc}</div>
+            </div>
+            <span className="text-brand-300 opacity-0 transition group-hover:opacity-100">→</span>
           </Link>
         ))}
       </div>
@@ -524,36 +638,53 @@ export default function Dashboard() {
 export function entityPageFiles(arch: Architecture): GeneratedFile[] {
   const out: GeneratedFile[] = [];
   for (const e of arch.entities.filter((x) => x.name !== "User")) {
-    const cols = e.fields.slice(0, 4).map((fld) => `      { key: "${fld.name}", label: "${titleCase(fld.name)}" },`).join("\n");
-    const inputs = e.fields.slice(0, 5).map((fld) => {
-      if (fld.type === "enum") return `        <label className="block text-sm"><span className="text-zinc-400">${titleCase(fld.name)}</span>\n          <select name="${fld.name}" className="input mt-1">${fld.enumValues?.map((v) => `<option value="${v}">${titleCase(v)}</option>`).join("")}</select></label>`;
-      if (fld.type === "text") return `        <label className="block text-sm"><span className="text-zinc-400">${titleCase(fld.name)}</span>\n          <textarea name="${fld.name}" className="input mt-1" ${fld.required === false ? "" : "required"} /></label>`;
-      return `        <label className="block text-sm"><span className="text-zinc-400">${titleCase(fld.name)}</span>\n          <input name="${fld.name}" type="${fld.type === "number" ? "number" : fld.type === "date" ? "date" : "text"}" className="input mt-1" ${fld.required === false ? "" : "required"} /></label>`;
-    }).join("\n");
+    const table = camel(e.plural);
+    const schema = camel(e.name) + "Schema";
+    const valImport = `import { ${schema} } from "@/lib/validators/${kebab(e.name)}";`;
+    const cols = e.fields.slice(0, 4).map((fld) => `      { key: "${fld.name}", label: "${titleCase(fld.name)}"${fld.type === "number" && /price|cost|amount|total/i.test(fld.name) ? ', format: "money"' : fld.type === "date" ? ', format: "date"' : ""} },`).join("\n");
+
+    const input = (fld: EntityField, prefix: string) => {
+      const label = titleCase(fld.name);
+      const req = fld.required === false ? "" : " required";
+      const def = prefix ? ` defaultValue={${prefix} ? formValue(${prefix}.${fld.name}) : ""}` : "";
+      if (fld.type === "enum") { const sel = prefix ? ` defaultValue={${prefix} ? String(${prefix}.${fld.name}) : undefined}` : ""; return `        <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-zinc-400">${label}</span>
+          <select name="${fld.name}"${sel} className="input">${(fld.enumValues ?? []).map((v) => `<option value="${v}">${titleCase(v)}</option>`).join("")}</select></label>`; }
+      if (fld.type === "text") return `        <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-zinc-400">${label}</span>\n          <textarea name="${fld.name}" rows={3} ${def} className="input" ${req} /></label>`;
+      if (fld.type === "boolean") { const chk = prefix ? ` defaultChecked={${prefix} ? Boolean(${prefix}.${fld.name}) : false}` : ""; return `        <label className="flex items-center gap-2.5 text-sm text-zinc-300"><input type="checkbox" name="${fld.name}"${chk} className="h-4 w-4 accent-brand-500" /> ${label}</label>`; }
+      const type = fld.type === "number" ? "number" : fld.type === "date" ? "date" : "text";
+      const step = fld.type === "number" ? ` step="any"` : "";
+      return `        <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-zinc-400">${label}</span>\n          <input name="${fld.name}" type="${type}"${step} ${def} className="input" ${req} /></label>`;
+    };
+
+    const formHelpers = `function formValue(v: unknown): string {
+  if (v == null) return "";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v);
+}`;
+
+    const listFields = e.fields.slice(0, 5);
     out.push(file(`src/app/dashboard/${e.slug}/page.tsx`, `import { DataTable } from "@/components/DataTable";
 import Link from "next/link";
+import { db } from "@/db";
+import { ${table} } from "@/db/schema";
 
-async function getRows() {
-  const res = await fetch(\`\${process.env.NEXT_PUBLIC_APP_URL}/api/${e.slug}\`, { cache: "no-store" });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data ?? [];
-}
+export const dynamic = "force-dynamic";
 
 export default async function ${e.name}ListPage() {
-  const rows = await getRows();
+  const rows = await db.select().from(${table}).limit(100);
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">${titleCase(e.plural)}</h1>
-          <p className="text-sm text-zinc-400">{rows.length} record{rows.length === 1 ? "" : "s"}</p>
+          <h1 className="text-2xl font-bold tracking-tight">${titleCase(e.plural)}</h1>
+          <p className="mt-0.5 text-sm text-zinc-400">{rows.length} record{rows.length === 1 ? "" : "s"}</p>
         </div>
-        <Link href="/dashboard/${e.slug}/new" className="btn-primary">New ${e.name}</Link>
+        <Link href="/dashboard/${e.slug}/new" className="btn-primary">+ New ${e.name}</Link>
       </div>
       <DataTable
         rows={rows}
-        empty="No ${e.slug.replace(/-/g, " ")} yet. Create the first one to get started."
+        hrefBase="/dashboard/${e.slug}"
+        empty="No ${e.slug.replace(/-/g, " ")} yet."
         columns={[
 ${cols}
         ]}
@@ -561,30 +692,89 @@ ${cols}
     </div>
   );
 }`));
+
+    const createInputs = listFields.map((fld) => input(fld, "")).join("\n");
     out.push(file(`src/app/dashboard/${e.slug}/new/page.tsx`, `import { redirect } from "next/navigation";
 import Link from "next/link";
+import { nanoid } from "nanoid";
+import { db } from "@/db";
+import { ${table} } from "@/db/schema";
+${valImport}
 
 export default function New${e.name}Page() {
   async function create(formData: FormData) {
     "use server";
-    const payload = Object.fromEntries(formData);
-    await fetch(\`\${process.env.NEXT_PUBLIC_APP_URL}/api/${e.slug}\`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const parsed = ${schema}.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) throw new Error("Invalid input: " + parsed.error.issues[0]?.message);
+    await db.insert(${table}).values({ id: nanoid(), ...parsed.data });
     redirect("/dashboard/${e.slug}");
   }
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <div>
-        <Link href="/dashboard/${e.slug}" className="text-sm text-zinc-400 hover:text-white">← Back to ${titleCase(e.plural)}</Link>
-        <h1 className="mt-2 text-2xl font-bold">New ${e.name}</h1>
+        <Link href="/dashboard/${e.slug}" className="text-sm text-zinc-400 transition hover:text-white">← ${titleCase(e.plural)}</Link>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">New ${e.name}</h1>
       </div>
       <form action={create} className="card space-y-4">
-${inputs}
-        <button type="submit" className="btn-primary w-full justify-center">Create ${e.name}</button>
+${createInputs}
+        <div className="flex gap-2 pt-1">
+          <button type="submit" className="btn-primary flex-1">Create ${e.name}</button>
+          <Link href="/dashboard/${e.slug}" className="btn-ghost">Cancel</Link>
+        </div>
+      </form>
+    </div>
+  );
+}`));
+
+    const editInputs = listFields.map((fld) => input(fld, "row")).join("\n");
+    out.push(file(`src/app/dashboard/${e.slug}/[id]/page.tsx`, `import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { ${table} } from "@/db/schema";
+${valImport}
+
+${formHelpers}
+
+export default async function Edit${e.name}Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [row] = await db.select().from(${table}).where(eq(${table}.id, id));
+  if (!row) notFound();
+
+  async function update(formData: FormData) {
+    "use server";
+    const parsed = ${schema}.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) throw new Error("Invalid input: " + parsed.error.issues[0]?.message);
+    await db.update(${table}).set(parsed.data).where(eq(${table}.id, id));
+    redirect("/dashboard/${e.slug}");
+  }
+
+  async function remove() {
+    "use server";
+    await db.delete(${table}).where(eq(${table}.id, id));
+    redirect("/dashboard/${e.slug}");
+  }
+
+  return (
+    <div className="mx-auto max-w-xl space-y-5">
+      <div>
+        <Link href="/dashboard/${e.slug}" className="text-sm text-zinc-400 transition hover:text-white">← ${titleCase(e.plural)}</Link>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">Edit ${e.name}</h1>
+      </div>
+      <form action={update} className="card space-y-4">
+${editInputs}
+        <div className="flex gap-2 pt-1">
+          <button type="submit" className="btn-primary flex-1">Save changes</button>
+          <Link href="/dashboard/${e.slug}" className="btn-ghost">Cancel</Link>
+        </div>
+      </form>
+      <form action={remove} className="card border-rose-500/20">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm text-zinc-400">Delete this ${e.slug.replace(/-/g, " ")} permanently.</div>
+          <button type="submit" className="btn-danger">Delete</button>
+        </div>
       </form>
     </div>
   );

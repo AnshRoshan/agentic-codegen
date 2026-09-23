@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, Play, Pause, StepForward, RotateCcw, Download, Copy, Trash2,
   LayoutGrid, Workflow, FileCode2, Database, KeyRound, ShieldCheck,
   Terminal as TerminalIcon, Activity, Search, PanelRightClose, PanelRightOpen,
-  CheckCircle2, Circle, Loader2, AlertTriangle, ChevronRight, Zap, Clock, MoreHorizontal,
+  CheckCircle2, Circle, Loader2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, Zap, Clock, MoreHorizontal,
 } from "lucide-react";
 import { useStore, type WorkspaceTab } from "../lib/store";
 import { AGENT_ORDER, AGENTS, agentMeta } from "../lib/types";
@@ -21,7 +21,6 @@ const TABS: Array<{ id: WorkspaceTab; label: string; icon: React.ReactNode }> = 
   { id: "env", label: "Environment", icon: <KeyRound size={16} /> },
   { id: "approvals", label: "Approvals", icon: <ShieldCheck size={16} /> },
   { id: "terminal", label: "Terminal", icon: <TerminalIcon size={16} /> },
-  { id: "activity", label: "Activity", icon: <Activity size={16} /> },
   { id: "insights", label: "Insights", icon: <Zap size={16} /> },
 ];
 
@@ -329,57 +328,88 @@ function PipelineTab({ pid }: { pid: string }) {
   );
 }
 
-// ─── Right inspector ────────────────────────────────────────────────────────
-function Inspector({ pid }: { pid: string }) {
-  const { projects, workspaces, setWtab } = useStore();
+// ─── Bottom dock: always-visible run stats + expandable live feed ────────
+function BottomDock({ pid, onOpenActivity }: { pid: string; onOpenActivity: () => void }) {
+  const { projects, workspaces, running, setWtab } = useStore();
   const project = projects.find((p) => p.id === pid)!;
   const ws = workspaces[pid];
-  const feed = [...ws.messages].slice(-9).reverse();
+  const isRunning = !!running[pid];
+  const [open, setOpen] = useState(false);
+  const seenRef = useRef(ws.messages.length);
+  const [unseen, setUnseen] = useState(0);
+
+  const feed = [...ws.messages].reverse();
   const pending = ws.checkpoints.filter((c) => c.status === "pending");
+  const pct = project.totalSteps ? Math.round((Math.min(project.currentStep, project.totalSteps) / project.totalSteps) * 100) : 0;
+  const currentStep = project.plan[project.currentStep];
+
+  useEffect(() => {
+    if (open) seenRef.current = ws.messages.length;
+    else setUnseen(Math.max(0, ws.messages.length - seenRef.current));
+  }, [ws.messages.length, open]);
+
+  const status = isRunning ? (
+    <span className="flex items-center gap-1.5">
+      <span className="status-dot bg-violet-400" data-live="true" />
+      {currentStep ? `Running: ${currentStep.title}` : "Finishing…"}
+    </span>
+  ) : project.status === "waiting_approval" ? (
+    <span className="text-amber-300">Waiting for your approval</span>
+  ) : project.status === "completed" ? (
+    <span className="text-emerald-300">Pipeline complete</span>
+  ) : project.status === "failed" ? (
+    <span className="text-rose-300">Failed</span>
+  ) : (
+    <span>{project.currentStep === 0 ? "Ready to start" : `Paused at step ${project.currentStep}/${project.totalSteps}`}</span>
+  );
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
-      {pending.length > 0 && (
-        <button onClick={() => setWtab("approvals")}
-          className="rounded-xl border border-amber-400/30 bg-amber-400/[0.07] p-3 text-left transition hover:bg-amber-400/[0.12]">
-          <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-amber-200">
-            <ShieldCheck size={14} /> {pending.length} approval{pending.length > 1 ? "s" : ""} needed
+    <div className="sticky bottom-0 z-30 mt-auto shrink-0">
+      {open && (
+        <div className="max-h-[38vh] overflow-y-auto border-t border-white/[0.07] bg-void/95 px-4 py-3 backdrop-blur">
+          {pending.length > 0 && (
+            <button onClick={() => { setOpen(false); setWtab("approvals"); }}
+              className="mb-3 flex w-full items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/[0.07] px-3 py-2 text-left text-[12.5px] font-semibold text-amber-200 transition hover:bg-amber-400/[0.12]">
+              <ShieldCheck size={14} /> {pending.length} approval{pending.length > 1 ? "s" : ""} needed — {pending[0].title}
+            </button>
+          )}
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Live feed</span>
+            <button onClick={() => { setOpen(false); onOpenActivity(); }} className="text-[11.5px] font-medium text-violet-300">Full history →</button>
           </div>
-          <div className="mt-1 truncate text-[12px] text-amber-200/70">{pending[0].title}</div>
-        </button>
-      )}
-      <div className="card p-3.5">
-        <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500">Run stats</div>
-        <div className="grid grid-cols-2 gap-2 text-center">
-          {[
-            [String(project.generatedFiles), "files"],
-            [formatCost(project.costMicros), "cost"],
-            [formatTokens(project.tokensIn + project.tokensOut), "tokens"],
-            [String(project.llmCalls), "llm calls"],
-          ].map(([v, l]) => (
-            <div key={l as string} className="rounded-lg bg-white/[0.03] px-2 py-2">
-              <div className="font-mono text-[13px] font-semibold">{v}</div>
-              <div className="text-[10.5px] text-ink-500">{l}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="card flex-1 p-3.5">
-        <div className="mb-2.5 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">Live feed</span>
-          <button onClick={() => setWtab("activity")} className="text-[11.5px] font-medium text-violet-300">All →</button>
-        </div>
-        <div className="space-y-2.5">
-          {feed.map((m) => (
-            <div key={m.id} className="text-[12px] leading-snug">
-              <div className="mb-0.5 flex items-center gap-1.5">
-                <AgentTag role={m.agentRole} />
-                <span className="font-mono text-[10px] text-ink-500">{timeAgo(m.createdAt)}</span>
+          <div className="space-y-2.5 pb-1">
+            {feed.map((m) => (
+              <div key={m.id} className="text-[12px] leading-snug">
+                <div className="mb-0.5 flex items-center gap-1.5">
+                  <AgentTag role={m.agentRole} />
+                  <span className="font-mono text-[10px] text-ink-500">{timeAgo(m.createdAt)}</span>
+                </div>
+                <p className="line-clamp-2 text-ink-300">{m.content.replace(/\*\*/g, "")}</p>
               </div>
-              <p className="line-clamp-3 text-ink-300">{m.content.replace(/\*\*/g, "")}</p>
-            </div>
-          ))}
-          {feed.length === 0 && <div className="text-[12px] text-ink-500">No events yet.</div>}
+            ))}
+            {feed.length === 0 && <div className="text-[12px] text-ink-500">No events yet — start the pipeline to see the agents work.</div>}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-white/[0.07] bg-panel2/95 px-4 py-2 backdrop-blur">
+        <button onClick={() => setOpen((v) => !v)} className="relative flex shrink-0 items-center gap-1.5 text-[12.5px] text-ink-200 transition hover:text-white">
+          <Activity size={13} className="text-violet-300" />
+          Live feed
+          {!open && unseen > 0 && (
+            <span className="absolute -right-3 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-violet-500 px-1 text-[9px] font-bold text-white">{unseen}</span>
+          )}
+          {open ? <ChevronDown size={12} className="text-ink-500" /> : <ChevronUp size={12} className="text-ink-500" />}
+        </button>
+        <span className="min-w-0 truncate text-[11.5px] text-ink-400">{status}</span>
+        <div className="hidden min-w-[120px] max-w-[220px] flex-1 items-center gap-2 md:flex">
+          <Progress value={pct} />
+          <span className="font-mono text-[10.5px] text-ink-500">{pct}%</span>
+        </div>
+        <div className="ml-auto flex items-center gap-3.5 text-[10.5px] text-ink-500">
+          <span><span className="font-mono text-[12px] font-semibold text-ink-200">{project.generatedFiles}</span> files</span>
+          <span className="hidden sm:inline"><span className="font-mono text-[12px] font-semibold text-ink-200">{formatTokens(project.tokensIn + project.tokensOut)}</span> tok</span>
+          <span><span className="font-mono text-[12px] font-semibold text-emerald-300">{formatCost(project.costMicros)}</span></span>
+          <span className="hidden lg:inline"><span className="font-mono text-[12px] font-semibold text-ink-200">{project.llmCalls}</span> calls</span>
         </div>
       </div>
     </div>
@@ -393,7 +423,6 @@ export default function WorkspacePage() {
     running, startPipeline, pausePipeline, stepOnce, resetProject,
     toggleAutoApprove, duplicateProject, deleteProject,
   } = useStore();
-  const [inspector, setInspector] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFile, setOpenFile] = useState<string | null>(null);
@@ -508,9 +537,6 @@ export default function WorkspacePage() {
                 </>
               )}
             </div>
-            <button onClick={() => setInspector((v) => !v)} className="btn-ghost btn-sm !px-2" title="Toggle inspector">
-              {inspector ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-            </button>
           </div>
         </div>
       </div>
@@ -530,50 +556,42 @@ export default function WorkspacePage() {
         </div>
       )}
 
-      {/* ── Body: rail + content + inspector ── */}
-      <div className="flex min-h-0 flex-1">
-        {/* Icon rail — collapses to icons on small screens */}
-        <nav className="flex w-[58px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-white/[0.07] bg-panel/40 p-2 sm:w-[172px]">
-          {TABS.map((t) => {
-            const b = badge(t.id);
-            const active = wtab === t.id;
-            return (
-              <button key={t.id} onClick={() => setWtab(t.id)} title={t.label}
-                className={cn("tab-rail-btn relative flex items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-left text-[13px] text-ink-400 hover:bg-white/[0.04] hover:text-white max-sm:justify-center max-sm:px-0",
-                  active && "active")}>
-                <span className={active ? "text-violet-300" : ""}>{t.icon}</span>
-                <span className="flex-1 font-medium max-sm:hidden">{t.label}</span>
-                {b > 0 && (
-                  <span className={cn("rounded-full px-1.5 py-0.5 font-mono text-[10px] font-bold max-sm:absolute max-sm:-right-0.5 max-sm:-top-0.5 max-sm:px-1",
-                    t.id === "approvals" ? "bg-amber-400/20 text-amber-200" : "bg-white/[0.08] text-ink-300")}>
-                    {b}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          <div className="mt-auto px-2.5 pb-1 pt-3 text-[11px] leading-relaxed text-ink-500 max-sm:hidden">
-            <Clock size={11} className="mr-1 inline" />
-            Updated {timeAgo(project.updatedAt)}
-          </div>
-        </nav>
+      {/* ── Tab bar (top) ── */}
+      <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-white/[0.07] bg-panel/40 px-3 py-1.5">
+        {TABS.map((t) => {
+          const b = badge(t.id);
+          const active = wtab === t.id;
+          return (
+            <button key={t.id} onClick={() => setWtab(t.id)} title={t.label}
+              className={cn("flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] transition",
+                active ? "bg-white/[0.09] text-white" : "text-ink-400 hover:bg-white/[0.04] hover:text-white")}>
+              <span className={active ? "text-violet-300" : ""}>{t.icon}</span>
+              {t.label}
+              {b > 0 && (
+                <span className={cn("rounded-full px-1.5 py-0.5 font-mono text-[10px] font-bold",
+                  t.id === "approvals" ? "bg-amber-400/20 text-amber-200" : "bg-white/[0.08] text-ink-300")}>
+                  {b}
+                </span>
+              )}
+            </button>
+          );
+        })}
+        <span className="ml-auto hidden shrink-0 pl-3 pr-1 text-[11px] text-ink-500 lg:inline">
+          <Clock size={11} className="mr-1 inline" />Updated {timeAgo(project.updatedAt)}
+        </span>
+      </div>
 
-        {/* Content */}
-        <div className="min-w-0 flex-1 overflow-y-auto p-4">
-          {wtab === "overview" && <OverviewTab pid={pid} />}
-          {wtab === "pipeline" && <PipelineTab pid={pid} />}
-          {wtab !== "overview" && wtab !== "pipeline" && (
-            <WorkspaceMore pid={pid} tab={wtab} openFile={openFile} setOpenFile={setOpenFile} />
-          )}
-        </div>
-
-        {/* Inspector */}
-        {inspector && (
-          <aside className="hidden w-[264px] shrink-0 border-l border-white/[0.07] bg-panel/40 xl:block">
-            <Inspector pid={pid} />
-          </aside>
+      {/* ── Content ── */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-0">
+        {wtab === "overview" && <OverviewTab pid={pid} />}
+        {wtab === "pipeline" && <PipelineTab pid={pid} />}
+        {wtab !== "overview" && wtab !== "pipeline" && (
+          <WorkspaceMore pid={pid} tab={wtab} openFile={openFile} setOpenFile={setOpenFile} />
         )}
       </div>
+
+      {/* ── Bottom dock: run stats + expandable live feed ── */}
+      <BottomDock pid={pid} onOpenActivity={() => setWtab("insights")} />
     </div>
   );
 }

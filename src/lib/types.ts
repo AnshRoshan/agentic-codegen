@@ -53,6 +53,7 @@ export interface Project {
   settings: ProjectSettings;
   isRunning: boolean;
   pendingCheckpoints?: number;
+  evalScore: { total: number; grade: "A" | "B" | "C" | "D"; checks: Array<{ id: string; label: string; pass: boolean; weight: number; detail: string }>; scoredAt: string } | null;
   startedAt: string | null; completedAt: string | null;
   createdAt: string; updatedAt: string;
 }

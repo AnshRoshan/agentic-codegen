@@ -130,6 +130,20 @@ export type ProjectSettings = {
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
+export interface RunEvalCheck {
+  id: string;
+  label: string;
+  pass: boolean;
+  weight: number;
+  detail: string;
+}
+export interface RunEvalScore {
+  total: number;
+  grade: "A" | "B" | "C" | "D";
+  checks: RunEvalCheck[];
+  scoredAt: string;
+}
+
 export const projects = pgTable(
   "projects",
   {
@@ -166,6 +180,7 @@ export const projects = pgTable(
     runHeartbeatAt: timestamp("run_heartbeat_at"),
     /** Set by the API to ask the running loop to stop after the current step. */
     pauseRequested: boolean("pause_requested").notNull().default(false),
+    evalScore: jsonb("eval_score").$type<RunEvalScore>(),
     startedAt: timestamp("started_at"),
     completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -194,6 +209,7 @@ export const agents = pgTable(
     llmCalls: integer("llm_calls").notNull().default(0),
     toolCalls: integer("tool_calls").notNull().default(0),
     filesWritten: integer("files_written").notNull().default(0),
+    evalScore: jsonb("eval_score").$type<RunEvalScore>(),
     startedAt: timestamp("started_at"),
     completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -223,6 +239,7 @@ export const tasks = pgTable(
     tokensIn: integer("tokens_in").notNull().default(0),
     tokensOut: integer("tokens_out").notNull().default(0),
     durationMs: integer("duration_ms").notNull().default(0),
+    evalScore: jsonb("eval_score").$type<RunEvalScore>(),
     startedAt: timestamp("started_at"),
     completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

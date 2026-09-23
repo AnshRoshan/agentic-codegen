@@ -10,6 +10,7 @@ import * as repo from "./repo";
 import { buildLanguageModel, describeError, isNonRetryable, modelForRole, resolveAiConfig, type ResolvedAiConfig } from "./ai";
 import { createAgentTools, createStepContext, STEP_SPECS, systemPromptFor, tablesCount, userPromptFor, type StepContext } from "./agent-runtime";
 import { runSimulatedStep } from "./simulation";
+import { scoreRun } from "./eval";
 import { analyzeWorkspace, formatDiagnostics, ownerRoleFor, type Diagnostic } from "./quality";
 
 // ─── Run registry (survives HMR via globalThis) ─────────────────────────────
@@ -276,14 +277,30 @@ function agentProgress(p: Project, role: AgentRole, afterComplete: boolean): num
 }
 
 async function finalizeComplete(p: Project) {
-  if (p.status === "completed" && p.completedAt) return;
-  await db.transaction(async (tx) => {
-    await tx.update(projects).set({ status: "completed", completedAt: p.completedAt ?? new Date(), errorMessage: null, updatedAt: new Date() }).where(eq(projects.id, p.id));
-    await tx.update(agents).set({ status: "completed", progress: 100, currentTask: null, completedAt: sql`COALESCE(${agents.completedAt}, now())` })
-      .where(and(eq(agents.projectId, p.id), sql`${agents.status} <> 'failed'`));
-  });
-  const fresh = await repo.getProject(p.id);
-  await repo.logMessage(p.id, "orchestrator", "success", `🎉 Pipeline complete — ${fresh?.generatedFiles ?? p.generatedFiles} files, ${fresh?.llmCalls ?? p.llmCalls} LLM calls, $${((fresh?.costMicros ?? p.costMicros) / 1e6).toFixed(3)} total. Download the bundle from the ⋯ menu.`);
+  if (!(p.status === "completed" && p.completedAt)) {
+    await db.transaction(async (tx) => {
+      await tx.update(projects).set({ status: "completed", completedAt: p.completedAt ?? new Date(), errorMessage: null, updatedAt: new Date() }).where(eq(projects.id, p.id));
+      await tx.update(agents).set({ status: "completed", progress: 100, currentTask: null, completedAt: sql`COALESCE(${agents.completedAt}, now())` })
+        .where(and(eq(agents.projectId, p.id), sql`${agents.status} <> 'failed'`));
+    });
+    const fresh = await repo.getProject(p.id);
+    await repo.logMessage(p.id, "orchestrator", "success", `🎉 Pipeline complete — ${fresh?.generatedFiles ?? p.generatedFiles} files, ${fresh?.llmCalls ?? p.llmCalls} LLM calls, $${((fresh?.costMicros ?? p.costMicros) / 1e6).toFixed(3)} total. Download the bundle from the ⋯ menu.`);
+  }
+  // Deterministic quality score over the finished workspace (see docs/ROADMAP.md #5).
+  // Runs even when the deploy step already flipped the status, and never twice.
+  if (p.evalScore) return;
+  try {
+    const score = await scoreRun(p.id);
+    await db.update(projects).set({ evalScore: score, updatedAt: new Date() }).where(eq(projects.id, p.id));
+    const failedChecks = score.checks.filter((c) => !c.pass);
+    await repo.logMessage(
+      p.id, "testing", failedChecks.length ? "warning" : "success",
+      `Quality score: **${score.total}/100 (grade ${score.grade})**${failedChecks.length ? `. Needs attention: ${failedChecks.map((c) => c.label).join(", ")}.` : " All checks passed."}`,
+    );
+  } catch (err) {
+    console.error("[eval] scoring failed:", err);
+    await repo.logMessage(p.id, "testing", "warning", `Quality scoring skipped: ${err instanceof Error ? err.message.slice(0, 140) : "error"}`).catch(() => undefined);
+  }
 }
 
 // ─── LLM step ───────────────────────────────────────────────────────────────

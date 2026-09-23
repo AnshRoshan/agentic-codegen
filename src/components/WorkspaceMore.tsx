@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import {
   FileCode2, Database, KeyRound, ShieldCheck, Terminal as TerminalIcon,
   Check, X, Eye, EyeOff, Plus, Trash2, Pencil,
-  ChevronDown, Copy, AlertTriangle, Info,
+  CheckCircle2, ChevronDown, Copy, AlertTriangle, Info,
 } from "lucide-react";
 import { useStore, type WorkspaceTab } from "../lib/store";
 import { agentMeta } from "../lib/types";
@@ -475,6 +475,28 @@ function InsightsTab({ pid }: { pid: string }) {
         </div>
       </SectionCard>
       <div className="space-y-3.5">
+        {project.evalScore && (
+          <SectionCard
+            title="Quality score"
+            subtitle={`Deterministic rubric over the finished workspace · ${new Date(project.evalScore.scoredAt).toLocaleString()}`}
+            right={<span className="chip font-mono !text-[13px] !font-bold border-violet-400/40 bg-violet-500/15 text-violet-200">{project.evalScore.total}/100 · {project.evalScore.grade}</span>}
+          >
+            <div className="space-y-1.5">
+              {project.evalScore.checks.map((c) => (
+                <div key={c.id} className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] hover:bg-white/[0.03]">
+                  {c.pass ? <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-400" /> : <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-300" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn("font-medium", c.pass ? "text-ink-200" : "text-ink-100")}>{c.label}</span>
+                      <span className="font-mono text-[10px] text-ink-500">{c.pass ? `+${c.weight}` : `0/${c.weight}`}</span>
+                    </div>
+                    <div className="truncate text-[11.5px] text-ink-500">{c.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        )}
         <SectionCard title="Run economics" subtitle="Every LLM call is metered.">
           <div className="grid grid-cols-2 gap-2.5">
             {[

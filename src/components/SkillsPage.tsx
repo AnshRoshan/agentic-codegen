@@ -109,7 +109,7 @@ export default function SkillsPage() {
           </SectionCard>
           <div className="card p-4 text-[12px] leading-relaxed text-ink-400">
             <span className="font-semibold text-ink-200">How it wires together:</span> when a task starts,
-            the orchestrator injects matching skills into the agent's context and grants scoped MCP tools —
+            the orchestrator injects matching skills into the agent&apos;s context and grants scoped MCP tools —
             e.g. the Database agent gets <span className="font-mono text-cyan-300">drizzle-schema</span> + <span className="font-mono text-cyan-300">postgres.migrate</span>.
           </div>
         </div>

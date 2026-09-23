@@ -50,7 +50,7 @@ interface StoreShape {
   running: Record<string, boolean>;
   loading: boolean;
   online: boolean;
-  createProject: (name: string, prompt: string, opts?: { emoji?: string; autoApprove?: boolean; mode?: "greenfield" | "brownfield" }) => Promise<string | null>;
+  createProject: (name: string, prompt: string, opts?: { emoji?: string; autoApprove?: boolean; mode?: "greenfield" | "brownfield" | "static" }) => Promise<string | null>;
   createFromPreset: (presetIdx: number) => Promise<string | null>;
   deleteProject: (id: string) => Promise<void>;
   duplicateProject: (id: string) => Promise<void>;
@@ -216,6 +216,40 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const t = setInterval(() => { void loadWorkspace(activeId); }, ms);
     return () => clearInterval(t);
   }, [activeId, activeBusy, view, loadWorkspace]);
+
+  // ── Live stream (SSE): instant status/messages/checkpoints while a
+  // workspace is open. Polling above remains as slow reconciliation + fallback.
+  const streamRef = useRef<EventSource | null>(null);
+  useEffect(() => {
+    if (!activeId || view !== "workspace") return;
+    const pid = activeId;
+    const es = new EventSource(`/api/projects/${pid}/events`);
+    streamRef.current = es;
+    es.addEventListener("status", (e) => {
+      try {
+        const d = JSON.parse((e as MessageEvent).data) as Partial<Project>;
+        setProjects((prev) => prev.map((p) => (p.id === pid ? { ...p, ...d } : p)));
+      } catch { /* ignore malformed frame */ }
+    });
+    es.addEventListener("message", (e) => {
+      try {
+        const m = JSON.parse((e as MessageEvent).data) as WorkspaceData["messages"][number];
+        setWorkspaces((prev) => {
+          const ws = prev[pid];
+          if (!ws || ws.messages.some((x) => x.id === m.id)) return prev;
+          return { ...prev, [pid]: { ...ws, messages: [...ws.messages, m] } };
+        });
+      } catch { /* ignore malformed frame */ }
+    });
+    es.addEventListener("checkpoint", (e) => {
+      try {
+        const d = JSON.parse((e as MessageEvent).data) as { checkpoints: WorkspaceData["checkpoints"] };
+        setWorkspaces((prev) => (prev[pid] ? { ...prev, [pid]: { ...prev[pid], checkpoints: d.checkpoints } } : prev));
+      } catch { /* ignore malformed frame */ }
+    });
+    es.onerror = () => { es.close(); if (streamRef.current === es) streamRef.current = null; };
+    return () => { es.close(); if (streamRef.current === es) streamRef.current = null; };
+  }, [activeId, view]);
 
   const anyRunning = projects.some((p) => p.isRunning);
   useEffect(() => {

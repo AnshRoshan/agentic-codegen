@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveCheckpoint } from "@/lib/pipeline";
+import { resolveCheckpoint } from "@/lib/server/engine";
 
 export const dynamic = "force-dynamic";
 

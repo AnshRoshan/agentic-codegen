@@ -10,7 +10,7 @@ export const GET = handler(async () => json({ projects: await listProjects() }))
 const createSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(80),
   prompt: z.string().trim().min(12, "Describe the product in at least a sentence").max(6000),
-  mode: z.enum(["greenfield", "brownfield"]).default("greenfield"),
+  mode: z.enum(["greenfield", "brownfield", "static"]).default("greenfield"),
   emoji: z.string().trim().max(8).optional(),
   autoApprove: z.boolean().optional(),
   settings: z.object({

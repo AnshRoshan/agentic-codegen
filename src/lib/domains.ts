@@ -182,10 +182,24 @@ export function inferDomain(prompt: string): DomainPack {
     if (score > bestScore) { bestScore = score; best = pack; }
   }
   if (best && bestScore >= 2) return best;
-  // Custom fallback: derive entities from prompt nouns
+  // Custom fallback: derive entities from prompt nouns. Filter out function
+  // words and common verbs so "recipe manager where users save" yields
+  // "Recipe", not "Where".
+  const STOP = new Set([
+    "with", "that", "this", "from", "have", "will", "build", "create", "make", "generate", "plus",
+    "management", "system", "application", "platform", "where", "when", "while", "what", "which",
+    "users", "user", "save", "saves", "store", "stores", "browse", "browses", "search", "searches",
+    "view", "views", "show", "shows", "list", "lists", "add", "adds", "edit", "edits", "delete",
+    "deletes", "update", "updates", "log", "logs", "send", "sends", "track", "tracks", "get", "set",
+    "lets", "allow", "allows", "need", "needs", "want", "wants", "each", "them", "they", "their",
+    "also", "then", "than", "into", "onto", "about", "above", "below", "over", "under", "again",
+    "features", "feature", "include", "includes", "including", "manage", "manages", "managing",
+    "tracking", "keeper", "based", "full", "simple", "easy", "quick", "clean", "modern", "beautiful",
+    "website", "web", "site", "page", "pages", "fast", "style", "styles", "design", "designs",
+  ]);
   const words = Array.from(new Set(
     prompt.replace(/[^a-zA-Z ]/g, " ").split(/\s+/)
-      .filter((w) => w.length > 3 && !["with", "that", "this", "from", "have", "will", "build", "create", "make", "generate", "plus", "management", "system", "application", "platform"].includes(w.toLowerCase()))
+      .filter((w) => w.length > 3 && !STOP.has(w.toLowerCase()))
       .slice(0, 4)
   ));
   const customEntities: Entity[] = words.length >= 2
