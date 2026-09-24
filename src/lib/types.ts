@@ -37,7 +37,7 @@ export interface TechStack {
 
 export interface Project {
   id: string; name: string; description: string; prompt: string;
-  mode: "greenfield" | "brownfield";
+  mode: "greenfield" | "brownfield" | "static";
   status: ProjectStatus;
   domain: string; domainLabel: string; emoji: string;
   techStack: TechStack; architecture: Architecture | null;

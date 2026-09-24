@@ -9,6 +9,28 @@ import { PRESETS, inferDomain } from "@/lib/domain";
 import { api, cn } from "@/lib/utils";
 import type { Project } from "@/db/schema";
 
+/** Read chosen files/zip into { path, content } pairs; same caps as the import API. */
+async function collectImportFiles(list: File[]): Promise<Array<{ path: string; content: string }>> {
+  const out: Array<{ path: string; content: string }> = [];
+  for (const f of list) {
+    if (out.length >= 500) break;
+    if (f.size > 400_000) continue;
+    if (/\.zip$/i.test(f.name)) {
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(f);
+      for (const entry of Object.values(zip.files)) {
+        if (entry.dir) continue;
+        out.push({ path: entry.name, content: await entry.async("string") });
+        if (out.length >= 500) return out;
+      }
+    } else {
+      const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath;
+      out.push({ path: rel && rel.includes("/") ? rel.slice(rel.indexOf("/") + 1) : f.name, content: await f.text() });
+    }
+  }
+  return out;
+}
+
 export function CreateProjectModal({ open, onClose, presetId }: { open: boolean; onClose: () => void; presetId?: string | null }) {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
@@ -18,6 +40,7 @@ export function CreateProjectModal({ open, onClose, presetId }: { open: boolean;
   const [autoStart, setAutoStart] = useState(true);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -47,6 +70,13 @@ export function CreateProjectModal({ open, onClose, presetId }: { open: boolean;
     setBusy(true);
     try {
       const project = await api<Project>("/api/projects", { method: "POST", body: JSON.stringify({ prompt, name: name || undefined, mode, autoApprove }) });
+      if (mode === "brownfield" && files.length) {
+        const payload = await collectImportFiles(files);
+        if (payload.length) {
+          const r = await api<{ imported: number; skipped: number }>(`/api/projects/${project.id}/import`, { method: "POST", body: JSON.stringify({ files: payload }) });
+          toast.success(`${r.imported} existing files imported${r.skipped ? ` (${r.skipped} skipped)` : ""}`);
+        }
+      }
       toast.success(`Project "${project.name}" created`);
       onClose();
       router.push(`/projects/${project.id}${autoStart ? "?start=1" : ""}`);
@@ -97,13 +127,39 @@ export function CreateProjectModal({ open, onClose, presetId }: { open: boolean;
               <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-ink-400">Mode</label>
               <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-ink-900 p-1">
                 {(["greenfield", "brownfield", "static"] as const).map((m) => (
-                  <button key={m} type="button" onClick={() => setMode(m)} title={m === "static" ? "A beautiful static website: 7 fast steps, no database" : undefined} className={cn("rounded-lg py-1.5 text-xs font-medium capitalize transition", mode === m ? "bg-white/10 text-ink-100" : "text-ink-400 hover:text-ink-200")}>
+                  <button key={m} type="button" onClick={() => setMode(m)} title={m === "static" ? "A beautiful static website: 7 fast steps, no database" : m === "brownfield" ? "Import an existing codebase; agents audit and extend it without destroying your code" : undefined} className={cn("rounded-lg py-1.5 text-xs font-medium capitalize transition", mode === m ? "bg-white/10 text-ink-100" : "text-ink-400 hover:text-ink-200")}>
                     {m}
                   </button>
                 ))}
               </div>
             </div>
           </div>
+          {mode === "brownfield" && (
+            <div>
+              <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-ink-400">Existing code</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="btn-secondary cursor-pointer text-xs">
+                  Upload ZIP
+                  <input type="file" accept=".zip" className="hidden" onChange={(e) => setFiles(e.target.files ? [...e.target.files] : [])} />
+                </label>
+                <label className="btn-secondary cursor-pointer text-xs">
+                  Pick folder
+                  <input
+                    type="file" multiple className="hidden"
+                    {...{ webkitdirectory: "true", directory: "true" }}
+                    onChange={(e) => setFiles(e.target.files ? [...e.target.files].filter((f) => f.size <= 400_000).slice(0, 500) : [])}
+                  />
+                </label>
+                {files.length > 0 && (
+                  <span className="text-[11px] text-ink-500">
+                    {files.length} file{files.length === 1 ? "" : "s"} selected
+                    <button type="button" className="ml-2 text-rose-300 hover:underline" onClick={() => setFiles([])}>clear</button>
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-[11px] text-ink-500">node_modules, .git and binaries are skipped automatically. Max 500 files, 400KB each.</p>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-6 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
             <Toggle checked={autoStart} onChange={setAutoStart} label="Start pipeline immediately" />
             <Toggle checked={autoApprove} onChange={setAutoApprove} label="Auto-approve checkpoints" />

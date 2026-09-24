@@ -8,6 +8,7 @@ import {
   type Architecture, type CheckpointContext, type DbColumn, type PlanStep, type Project, type ProjectSettings,
 } from "@/db/schema";
 import { AGENT_ORDER, AGENTS, type AgentRole } from "@/lib/types";
+import { sanitizeImportPath } from "@/lib/import-path";
 import { buildArchitecture, DEFAULT_STACK, inferDomain } from "@/lib/domains";
 import { languageFor } from "@/lib/codegen";
 
@@ -48,6 +49,21 @@ export function buildStaticPlan(): PlanStep[] {
     { agent: "devops", key: "static-ship", title: "Ship", description: "netlify.toml, README and deploy instructions; zip-ready bundle." },
   ];
   return steps.map((s, index) => ({ ...s, index }));
+}
+
+// ─── Brownfield import ──────────────────────────────────────────────────────
+
+/** Bulk-import existing files as user-owned file nodes. ponytail: ≤500 files / ≤400KB each — add tar streaming if real repos need more. */
+export async function importFiles(pid: string, files: Array<{ path: string; content: string }>): Promise<{ imported: number; skipped: number }> {
+  const seen = new Map<string, string>();
+  let skipped = 0;
+  for (const f of files) {
+    const p = sanitizeImportPath(f.path);
+    if (!p || f.content.includes("\u0000")) { skipped++; continue; }
+    seen.set(p, f.content);
+  }
+  for (const [path, content] of seen) await upsertFile(pid, "user", path, content);
+  return { imported: seen.size, skipped };
 }
 
 // ─── Bootstrap / lifecycle ──────────────────────────────────────────────────
@@ -131,7 +147,12 @@ export async function resetProject(pid: string): Promise<Project | undefined> {
   const arch = p.architecture ?? buildArchitecture(p.prompt, inferDomain(p.prompt));
   const plan = p.mode === "static" ? buildStaticPlan() : buildPlan(arch);
   return db.transaction(async (tx) => {
-    await tx.delete(fileNodes).where(eq(fileNodes.projectId, pid));
+    // Keep user-owned files (imported repos, manual editor edits); drop everything agents generated.
+    await tx.delete(fileNodes).where(and(
+      eq(fileNodes.projectId, pid),
+      sql`${fileNodes.agentRole} IS NULL OR ${fileNodes.agentRole} <> 'user'`,
+    ));
+    const [{ n: keptUserFiles }] = await tx.select({ n: sql<number>`count(*)::int` }).from(fileNodes).where(eq(fileNodes.projectId, pid));
     await tx.delete(dbTables).where(eq(dbTables.projectId, pid));
     await tx.delete(environmentVariables).where(eq(environmentVariables.projectId, pid));
     await tx.delete(hitlCheckpoints).where(eq(hitlCheckpoints.projectId, pid));
@@ -156,7 +177,7 @@ export async function resetProject(pid: string): Promise<Project | undefined> {
     });
     const [updated] = await tx.update(projects).set({
       status: "draft", plan, architecture: arch, currentStep: 0, totalSteps: plan.length, totalTasks: plan.length,
-      completedTasks: 0, generatedFiles: 0, tokensIn: 0, tokensOut: 0, costMicros: 0, llmCalls: 0, toolCalls: 0,
+      completedTasks: 0, generatedFiles: keptUserFiles, tokensIn: 0, tokensOut: 0, costMicros: 0, llmCalls: 0, toolCalls: 0,
       repairIterations: 0, errorMessage: null, runId: null, runHeartbeatAt: null, pauseRequested: false, evalScore: null,
       startedAt: null, completedAt: null, updatedAt: new Date(),
     }).where(eq(projects.id, pid)).returning();
