@@ -84,6 +84,12 @@ function envConfig(): ResolvedAiConfig | null {
   if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return { ...base, provider: "google", apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY, baseUrl: null, model: process.env.AI_MODEL ?? "gemini-2.5-flash" };
   }
+  if (process.env.DEEPSEEK_API_KEY) {
+    return { ...base, provider: "deepseek", apiKey: process.env.DEEPSEEK_API_KEY, baseUrl: process.env.AI_BASE_URL ?? null, model: process.env.AI_MODEL ?? "deepseek-v4-pro" };
+  }
+  if (process.env.ZHIPU_API_KEY) {
+    return { ...base, provider: "zhipu", apiKey: process.env.ZHIPU_API_KEY, baseUrl: process.env.AI_BASE_URL ?? null, model: process.env.AI_MODEL ?? "glm-5.3" };
+  }
   const key = process.env.OPENAI_API_KEY || process.env.AI_API_KEY;
   if (key) {
     const baseUrl = process.env.AI_BASE_URL ?? process.env.OPENAI_BASE_URL ?? null;
@@ -181,6 +187,17 @@ export function buildLanguageModel(cfg: ResolvedAiConfig, modelId: string): Lang
         apiVersion: cfg.azureApiVersion ?? undefined,
       });
       return azure(modelId);
+    }
+    case "deepseek":
+    case "zhipu": {
+      // Both expose OpenAI-compatible chat completions; override baseUrl only for proxies.
+      const defaults: Record<"deepseek" | "zhipu", { name: string; baseURL: string }> = {
+        deepseek: { name: "deepseek", baseURL: "https://api.deepseek.com" },
+        zhipu: { name: "zhipu", baseURL: "https://api.z.ai/api/paas/v4" },
+      };
+      const d = defaults[cfg.provider];
+      const compat = createOpenAICompatible({ name: d.name, baseURL: cfg.baseUrl || d.baseURL, apiKey: cfg.apiKey, includeUsage: true });
+      return compat.chatModel(modelId);
     }
     case "custom": {
       if (!cfg.baseUrl) throw new Error("Custom provider requires a base URL");

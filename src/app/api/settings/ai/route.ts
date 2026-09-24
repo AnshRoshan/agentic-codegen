@@ -25,7 +25,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as { provider?: string; apiKey?: string; baseUrl?: string; model?: string; temperature?: number };
   const current = await getOrCreate();
-  const provider = ["openai", "azure", "anthropic", "custom"].includes(body.provider ?? "") ? (body.provider as typeof current.provider) : current.provider;
+  const provider = ["openai", "azure", "anthropic", "google", "deepseek", "zhipu", "custom"].includes(body.provider ?? "") ? (body.provider as typeof current.provider) : current.provider;
   const apiKey = typeof body.apiKey === "string" && body.apiKey.trim() ? body.apiKey.trim() : current.apiKey;
   const [row] = await db
     .update(aiSettings)

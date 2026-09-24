@@ -9,7 +9,7 @@ import { AGENT_ORDER, AGENTS } from "@/lib/agents";
 import { api, cn } from "@/lib/utils";
 
 interface Settings {
-  provider: "openai" | "azure" | "anthropic" | "custom";
+  provider: "openai" | "azure" | "anthropic" | "google" | "deepseek" | "zhipu" | "custom";
   model: string;
   baseUrl: string | null;
   temperature: number;
@@ -25,7 +25,10 @@ const PROVIDERS: Array<{ id: Settings["provider"]; label: string; hint: string; 
   { id: "openai", label: "OpenAI", hint: "api.openai.com", models: ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "o4-mini"] },
   { id: "azure", label: "Azure OpenAI", hint: "https://<resource>.openai.azure.com", models: ["gpt-4.1", "gpt-4o"] },
   { id: "anthropic", label: "Anthropic", hint: "api.anthropic.com", models: ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"] },
-  { id: "custom", label: "OpenAI-compatible", hint: "e.g. http://localhost:11434/v1", models: ["llama-3.3-70b", "qwen2.5-coder", "deepseek-v3"] },
+  { id: "google", label: "Google AI", hint: "generativelanguage.googleapis.com", models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"] },
+  { id: "deepseek", label: "DeepSeek", hint: "api.deepseek.com · V4, the DeepSeek Harness models", models: ["deepseek-v4-pro", "deepseek-v4-flash"] },
+  { id: "zhipu", label: "Z.ai (GLM)", hint: "api.z.ai · GLM-5.3, the ZCode harness models", models: ["glm-5.3", "glm-5.3-flash"] },
+  { id: "custom", label: "OpenAI-compatible", hint: "e.g. http://localhost:11434/v1", models: ["llama-3.3-70b", "qwen3-coder", "deepseek-v4-flash"] },
 ];
 
 export function SettingsPanel() {

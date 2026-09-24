@@ -6,7 +6,7 @@
 export type ProviderVendor =
   | "OpenAI" | "Anthropic" | "Google" | "Meta" | "Mistral" | "DeepSeek" | "Qwen" | "xAI" | "Moonshot" | "Zhipu";
 
-export type ProviderKey = "openai" | "anthropic" | "google" | "azure" | "custom";
+export type ProviderKey = "openai" | "anthropic" | "google" | "azure" | "deepseek" | "zhipu" | "custom";
 
 export type Capability =
   | "tools" | "structured" | "reasoning" | "vision" | "audio" | "open-weights" | "long-context" | "fim" | "cache";
@@ -66,14 +66,15 @@ export const AI_MODELS: AIModel[] = [
   { id: "grok-code-fast-1", name: "Grok Code Fast 1", provider: "xAI", servedBy: OPENAI_COMPAT, family: "Grok Code", tier: "coder", released: "2025-08", contextTokens: 256_000, maxOutputTokens: 32_000, inputPer1M: 0.2, outputPer1M: 1.5, cachedInputPer1M: 0.02, speed: 5, quality: 4, coding: 4, capabilities: ["tools", "structured", "reasoning", "cache"], bestFor: ["Fast agentic coding", "Cheap tool loops"], recommendedRoles: ["backend", "frontend"] },
 
   // ── DeepSeek ──────────────────────────────────────────────────────────────
-  { id: "deepseek-chat", name: "DeepSeek V3.1", provider: "DeepSeek", servedBy: OPENAI_COMPAT, family: "DeepSeek V3", tier: "balanced", released: "2025-08", contextTokens: 128_000, maxOutputTokens: 8_192, inputPer1M: 0.27, outputPer1M: 1.1, cachedInputPer1M: 0.07, speed: 4, quality: 4, coding: 4, capabilities: ["tools", "structured", "open-weights", "cache"], bestFor: ["Cheap reasoning", "Self-hosting"], notes: "Route via https://api.deepseek.com" },
-  { id: "deepseek-reasoner", name: "DeepSeek R1", provider: "DeepSeek", servedBy: OPENAI_COMPAT, family: "DeepSeek R1", tier: "reasoning", released: "2025-05", contextTokens: 128_000, maxOutputTokens: 64_000, inputPer1M: 0.55, outputPer1M: 2.19, cachedInputPer1M: 0.14, speed: 2, quality: 4, coding: 4, capabilities: ["reasoning", "open-weights", "cache"], bestFor: ["Math/logic", "Planning"], notes: "No native tool calling — use for planning steps only." },
+  { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", provider: "DeepSeek", servedBy: ["deepseek", "custom"], family: "DeepSeek V4", tier: "fast", released: "2026-07", contextTokens: 128_000, maxOutputTokens: 8_192, inputPer1M: 0.14, outputPer1M: 0.28, cachedInputPer1M: 0.0028, speed: 5, quality: 3, coding: 4, capabilities: ["tools", "structured", "open-weights", "cache"], bestFor: ["Cheap agent loops", "Bulk generation"], recommendedRoles: ["devops", "testing"], notes: "Same model line the open-source DeepSeek Harness runs on. Route via https://api.deepseek.com." },
+  { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", provider: "DeepSeek", servedBy: ["deepseek", "custom"], family: "DeepSeek V4", tier: "coder", released: "2026-07", contextTokens: 128_000, maxOutputTokens: 64_000, inputPer1M: 1.74, outputPer1M: 3.48, cachedInputPer1M: 0.0145, speed: 4, quality: 4, coding: 5, capabilities: ["tools", "structured", "reasoning", "open-weights", "cache"], bestFor: ["Agentic coding", "Harness-style plugin loops"], recommendedRoles: ["backend", "frontend"], notes: "Harness-tuned agentic model; keep tool definitions stable across turns for prefix-cache hits. Route via https://api.deepseek.com." },
 
   // ── Qwen / Moonshot / Zhipu ───────────────────────────────────────────────
   { id: "qwen3-coder-480b-a35b-instruct", name: "Qwen3 Coder 480B", provider: "Qwen", servedBy: OPENAI_COMPAT, family: "Qwen3", tier: "coder", released: "2025-07", contextTokens: 262_144, maxOutputTokens: 65_536, inputPer1M: 0.4, outputPer1M: 1.6, speed: 4, quality: 4, coding: 5, capabilities: ["tools", "structured", "open-weights", "long-context", "fim"], bestFor: ["Agentic coding", "Repo-scale edits"], recommendedRoles: ["backend"] },
   { id: "qwen3-235b-a22b-instruct", name: "Qwen3 235B", provider: "Qwen", servedBy: OPENAI_COMPAT, family: "Qwen3", tier: "balanced", released: "2025-07", contextTokens: 262_144, maxOutputTokens: 32_768, inputPer1M: 0.2, outputPer1M: 0.6, speed: 4, quality: 4, coding: 4, capabilities: ["tools", "structured", "open-weights", "long-context"], bestFor: ["Open-weight generalist"] },
   { id: "kimi-k2-0905", name: "Kimi K2", provider: "Moonshot", servedBy: OPENAI_COMPAT, family: "Kimi K2", tier: "balanced", released: "2025-09", contextTokens: 262_144, maxOutputTokens: 32_768, inputPer1M: 0.6, outputPer1M: 2.5, cachedInputPer1M: 0.15, speed: 3, quality: 4, coding: 4, capabilities: ["tools", "structured", "open-weights", "long-context", "cache"], bestFor: ["Agentic tool use", "Open weights"] },
-  { id: "glm-4.5", name: "GLM-4.5", provider: "Zhipu", servedBy: OPENAI_COMPAT, family: "GLM-4.5", tier: "balanced", released: "2025-07", contextTokens: 128_000, maxOutputTokens: 96_000, inputPer1M: 0.6, outputPer1M: 2.2, speed: 4, quality: 4, coding: 4, capabilities: ["tools", "structured", "reasoning", "open-weights"], bestFor: ["Agentic workflows", "Hybrid thinking"] },
+  { id: "glm-5.3", name: "GLM-5.3", provider: "Zhipu", servedBy: ["zhipu", "custom"], family: "GLM-5", tier: "frontier", released: "2026-08", contextTokens: 1_000_000, maxOutputTokens: 128_000, inputPer1M: 1.4, outputPer1M: 4.4, cachedInputPer1M: 0.26, speed: 3, quality: 5, coding: 5, capabilities: ["tools", "structured", "reasoning", "vision", "long-context", "cache"], bestFor: ["Long-horizon agentic coding", "Repo-scale edits"], recommendedRoles: ["orchestrator", "architect", "backend"], notes: "Official model behind the ZCode harness. Route via https://api.z.ai/api/paas/v4." },
+  { id: "glm-5.3-flash", name: "GLM-5.3 Flash", provider: "Zhipu", servedBy: ["zhipu", "custom"], family: "GLM-5", tier: "coder", released: "2026-08", contextTokens: 1_000_000, maxOutputTokens: 131_072, inputPer1M: 0.15, outputPer1M: 0.5, cachedInputPer1M: 0.03, speed: 5, quality: 4, coding: 4, capabilities: ["tools", "structured", "reasoning", "long-context", "cache"], bestFor: ["Budget agent loops", "Fast multi-file edits"], recommendedRoles: ["frontend", "testing"], notes: "Frontier intelligence at flash cost; ZCode harness partner model." },
 
   // ── Meta / Mistral ────────────────────────────────────────────────────────
   { id: "llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", servedBy: OPENAI_COMPAT, family: "Llama 4", tier: "balanced", released: "2025-04", contextTokens: 1_000_000, maxOutputTokens: 16_384, inputPer1M: 0.2, outputPer1M: 0.6, speed: 4, quality: 3, coding: 3, capabilities: ["tools", "vision", "open-weights", "long-context"], bestFor: ["Self-hosted", "Private code"] },
@@ -89,6 +90,8 @@ export const PROVIDER_KEY_LABELS: Record<ProviderKey, string> = {
   anthropic: "Anthropic",
   google: "Google AI",
   azure: "Azure OpenAI",
+  deepseek: "DeepSeek",
+  zhipu: "Z.ai (GLM)",
   custom: "OpenAI-compatible",
 };
 

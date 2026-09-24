@@ -63,6 +63,8 @@ export const aiProviderEnum = pgEnum("ai_provider", [
   "anthropic",
   "google",
   "azure",
+  "deepseek",
+  "zhipu",
   "custom",
 ]);
 

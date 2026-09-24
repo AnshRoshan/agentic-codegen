@@ -1,13 +1,14 @@
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Project, WorkspaceData, FileNode } from "./types";
+import type { ProviderKey } from "./models";
 import { PRESETS } from "./domains";
 
 export type View = "landing" | "dashboard" | "workspace" | "models" | "skills" | "settings";
 export type WorkspaceTab = "overview" | "pipeline" | "files" | "database" | "env" | "approvals" | "terminal" | "activity" | "insights";
 
 export interface Settings {
-  provider: "openai" | "anthropic" | "google" | "azure" | "custom";
+  provider: ProviderKey;
   model: string;
   plannerModel: string | null;
   agentModels: Record<string, string>;

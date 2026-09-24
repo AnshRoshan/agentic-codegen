@@ -11,6 +11,8 @@ const PROVIDER_HELP: Record<ProviderKey, { keyPlaceholder: string; baseUrl?: str
   anthropic: { keyPlaceholder: "sk-ant-…", note: "Claude 4 family. Sonnet 4.5 is the best price/quality for agentic coding." },
   google: { keyPlaceholder: "AIza…", note: "Google AI Studio key. Gemini 2.5 Flash is the cheapest tool-capable frontier model." },
   azure: { keyPlaceholder: "Azure OpenAI key", note: "Model field must be your deployment name. Provide the resource name or a full base URL." },
+  deepseek: { keyPlaceholder: "DeepSeek key", note: "DeepSeek V4 models that the DeepSeek Harness runs on. Defaults to https://api.deepseek.com." },
+  zhipu: { keyPlaceholder: "Z.ai key", note: "GLM-5.3 models that the ZCode harness runs on. Defaults to https://api.z.ai/api/paas/v4." },
   custom: { keyPlaceholder: "Bearer token", baseUrl: "https://openrouter.ai/api/v1", note: "Any OpenAI-compatible chat completions endpoint: OpenRouter, Together, Groq, DeepSeek, xAI, LiteLLM, vLLM, Ollama…" },
 };
 

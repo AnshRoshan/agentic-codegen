@@ -29,9 +29,12 @@ const PRICING: Record<string, ModelPricing> = {
   // Gemini via compatible
   "gemini-2.0-flash":         { input: 0.10, output: 0.40 },
   "gemini-1.5-pro":           { input: 1.25, output: 5.00 },
-  // DeepSeek
-  "deepseek-chat":            { input: 0.14, output: 0.28 },
-  "deepseek-coder":           { input: 0.14, output: 0.28 },
+  // DeepSeek (V4 — legacy chat/coder aliases retired 2026-07)
+  "deepseek-v4-flash":        { input: 0.14,  output: 0.28,  cachedInput: 0.0028 },
+  "deepseek-v4-pro":          { input: 1.74,  output: 3.48,  cachedInput: 0.0145 },
+  // Z.ai GLM
+  "glm-5.3":                  { input: 1.40,  output: 4.40,  cachedInput: 0.26 },
+  "glm-5.3-flash":            { input: 0.15,  output: 0.50,  cachedInput: 0.03 },
 };
 
 // Fuzzy match: "gpt-4o-mini-2024-07-18" → "gpt-4o-mini"

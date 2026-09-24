@@ -28,7 +28,7 @@ export const GET = handler(async () => {
 });
 
 const schema = z.object({
-  provider: z.enum(["openai", "anthropic", "google", "azure", "custom"]).optional(),
+  provider: z.enum(["openai", "anthropic", "google", "azure", "deepseek", "zhipu", "custom"]).optional(),
   apiKey: z.string().max(500).optional(), // "" clears the key
   baseUrl: z.string().max(500).nullable().optional(),
   model: z.string().trim().min(1).max(120).optional(),
