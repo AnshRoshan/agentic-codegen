@@ -75,6 +75,13 @@ Defined in `src/lib/server/agent-runtime.ts` (`STEP_SPECS`) and executed by
 `engine.ts`. Each step has machine-checked acceptance criteria (`verify`) and a
 fallback simulation.
 
+Three modes select three plans (`repo.planFor`): **greenfield** (the 14 steps
+below), **static** (7 fast website steps), and **brownfield** (9 `bp-*` steps:
+audit the imported codebase via `POST /api/projects/[id]/import`, then apply
+additive changes only — existing user files are never rewritten or deleted, and
+`reset` keeps them). Harness-tuned coder models are first-class providers:
+`deepseek` (V4, api.deepseek.com) and `zhipu` (GLM-5.3, api.z.ai).
+
 | # | Step key | Owner | Output | Verification |
 |---|----------|-------|--------|--------------|
 | 1 | `analyze` | Orchestrator | Refined `Architecture` (entities, features) via `update_architecture` | ≥ 2 entities |
