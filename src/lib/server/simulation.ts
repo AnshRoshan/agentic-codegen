@@ -222,7 +222,85 @@ const SIM: Record<string, Exec> = {
     await ctx.log("success", "Static site shipped — drag-and-drop or CLI deploy ready.");
     ctx.stats.taskSummary = "Static site deployed: zip-ready bundle with deploy config.";
   },
+
+  // ── Brownfield plan (9 steps: audit → additive patch) ──
+  async "bp-audit"(ctx) {
+    const files = await ctx.listFiles();
+    await meter(ctx, 2200, 900, "codebase audit", 4);
+    const byArea = {
+      config: files.filter((f) => !f.path.includes("/")).length,
+      src: files.filter((f) => f.path.startsWith("src/")).length,
+      db: files.filter((f) => f.path.startsWith("src/db/")).length,
+      api: files.filter((f) => f.path.includes("/api/")).length,
+      pages: files.filter((f) => f.path.endsWith("page.tsx")).length,
+    };
+    await ctx.log("tool", `Found ${files.length} files: ${byArea.config} configs, ${byArea.src} under src/, ${byArea.db} db, ${byArea.api} routes, ${byArea.pages} pages.`, { tool: "list_files" });
+    const pkg = await ctx.readFile("package.json");
+    let deps = "none detected";
+    try { deps = Object.keys(JSON.parse(pkg ?? "{}").dependencies ?? {}).slice(0, 6).join(", ") || "none"; } catch { /* malformed package.json is itself an audit finding */ }
+    await ctx.log("info", `Dependencies: ${deps}.`);
+    await ctx.writeFiles([{ path: "docs/AUDIT.md", content: auditMarkdown(ctx, files, pkg ? "package.json present" : "missing") }]);
+    ctx.stats.taskSummary = `Audited ${files.length} existing files; gaps vs brief documented.`;
+  },
+  async "bp-schema"(ctx) {
+    const arch = ctx.arch;
+    const have = new Set((await ctx.listFiles()).map((f) => f.path));
+    await meter(ctx, 2400, 1800, "schema sync", arch.entities.length);
+    for (const entity of arch.entities) await ctx.defineTable(entity.plural, tableColumns(entity), createTableSql(entity));
+    if (!have.has("src/db/schema.ts")) await ctx.writeFiles(databaseFiles(arch));
+    ctx.requestApproval({
+      type: "schema", title: "Approve additive schema migration",
+      description: "New tables only — existing tables and columns are untouched. Review the CREATE statements.",
+      riskLevel: "medium",
+      context: {
+        summary: arch.entities.map((e) => `+ ${snake(e.plural)} (new)`),
+        diff: arch.entities.map(createTableSql).join("\n\n"), command: "npx drizzle-kit push", affected: arch.entities.map((e) => snake(e.plural)),
+      },
+    });
+    ctx.stats.taskSummary = `${arch.entities.length} new tables modelled additively.`;
+  },
+  async "bp-api"(ctx) {
+    const have = new Set((await ctx.listFiles()).map((f) => f.path));
+    const missing = apiFiles(ctx.arch).filter((f) => !have.has(f.path));
+    await meter(ctx, 3000, 4200, "api extension", missing.length);
+    await ctx.writeFiles(missing);
+    await ctx.log("success", `Added ${missing.length} route/validator files for missing resources; existing handlers untouched.`);
+    ctx.stats.taskSummary = missing.length ? `API extended with ${missing.length} files.` : "Existing API already covers the architecture.";
+  },
+  async "bp-ui"(ctx) {
+    const have = new Set((await ctx.listFiles()).map((f) => f.path));
+    const shell = have.has("src/components/AppShell.tsx") ? [] : frontendShellFiles(ctx.project.name, ctx.arch);
+    const pages = entityPageFiles(ctx.arch).filter((f) => !have.has(f.path));
+    await meter(ctx, 2800, 4800, "ui extension", shell.length + pages.length);
+    await ctx.writeFiles([...shell, ...pages]);
+    await ctx.log("success", `Added ${shell.length + pages.length} UI files wired into the existing layout.`);
+    ctx.stats.taskSummary = `UI extended: ${shell.length + pages.length} new files.`;
+  },
+  async "bp-tests"(ctx) {
+    const have = new Set((await ctx.listFiles()).map((f) => f.path));
+    const missing = testFiles(ctx.arch).filter((f) => !have.has(f.path));
+    await meter(ctx, 1800, 2200, "regression tests", missing.length + 1);
+    await ctx.writeFiles(missing);
+    await ctx.runCommand("npm test");
+    await ctx.log("success", `Added ${missing.length} test files against the changes; existing suite ran clean.`);
+    ctx.stats.taskSummary = "Change-scoped tests added; suite green.";
+  },
+  async "bp-ship"(ctx) {
+    const files = await ctx.listFiles();
+    await meter(ctx, 1000, 700, "change report", 1);
+    await ctx.writeFiles([{ path: "docs/CHANGES.md", content: changesMarkdown(ctx, files) }]);
+    ctx.requestApproval({
+      type: "deploy", title: "Approve deploy of the change set",
+      description: "Deploy the extended codebase? The diff versus the imported baseline is in docs/CHANGES.md.",
+      riskLevel: "high",
+      context: { summary: [`+${files.length} files in workspace`, "additive migrations applied", "existing routes untouched"], command: "deploy --prod", affected: ["production"] },
+    });
+    ctx.stats.taskSummary = "Change report ready; deploy gated on approval.";
+  },
 };
+
+SIM["bp-plan"] = SIM.plan;
+SIM["bp-arch"] = SIM.architecture;
 
 // ─── Docs ───────────────────────────────────────────────────────────────────
 
@@ -298,6 +376,16 @@ index.html · about.html · services.html · contact.html · 404.html
 styles.css · script.js · netlify.toml
 \`\`\`
 `;
+}
+
+function auditMarkdown(ctx: StepContext, files: Array<{ path: string; size: number }>, pkgNote: string): string {
+  const arch = ctx.arch;
+  return `# Codebase audit — ${ctx.project.name}\n\nImported brownfield workspace (${pkgNote}).\n\n## Inventory\n\n\`\`\`\n${files.slice(0, 120).map((f) => f.path).join("\n")}${files.length > 120 ? `\n… +${files.length - 120} more` : ""}\n\`\`\`\n\n## Gaps vs the brief\n\n| Gap | Kind | Target |\n|-----|------|--------|\n${arch.entities.map((e) => `| ${e.name} resource end-to-end | ${files.some((f) => f.path.includes(`/${e.slug}/`)) ? "verify MODIFY" : "ADD"} | /api/${e.slug}, src/app/${e.slug} |`).join("\n")}\n| ${arch.features.length} brief features not present in code | MODIFY | see docs/PLAN.md |\n\n## Principles\n\n- Existing files are the source of truth; changes are additive and minimal.\n- No renames, drops or rewrites outside the change list.\n`;
+}
+
+function changesMarkdown(ctx: StepContext, files: Array<{ path: string }>): string {
+  const added = files.filter((f) => !/^(package\.json|tsconfig|next\.config)/.test(f.path) && (f.path.startsWith("docs/") || f.path.includes("/api/") || f.path.endsWith("page.tsx") || f.path.startsWith("src/db/"))).slice(0, 40);
+  return `# Change report — ${ctx.project.name}\n\nDelta versus the imported baseline.\n\n## Added / modified by this run\n\n${added.map((f) => `- \`${f.path}\``).join("\n")}\n\n## Database\n\n${ctx.arch.entities.map((e) => `- ${ctx.project.mode === "brownfield" ? "additive" : ""} table \`${snake(e.plural)}\` (${e.fields.length} fields)`).join("\n")}\n\n## Rollback\n\n- Revert = delete added files, restore modified ones from the baseline import.\n- Migrations are additive; no down-migration required.\n`;
 }
 
 function deployMarkdown(ctx: StepContext): string {

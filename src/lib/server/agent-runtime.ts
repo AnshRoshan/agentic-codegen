@@ -506,14 +506,75 @@ export const STEP_SPECS: Record<string, StepSpec> = {
     instructions: `Prepare the release: write docs/DEPLOY.md (env checklist, migration order, rollback plan) and call request_approval with type "deploy", riskLevel "high", a summary of the exact actions (push image, run migrations, flip traffic) and affected systems. Then complete_task.`,
     verify: ({ files }) => (files.some((f) => f.path === "docs/DEPLOY.md") ? [] : ["docs/DEPLOY.md must exist"]),
   },
+
+  // ── Brownfield plan (mode === "brownfield", 9 steps) ──
+  "bp-audit": {
+    statusAfter: "planning",
+    instructions: `This is a BROWNFIELD run: the workspace already contains the user's existing code. Use list_files and read_file to inspect the real codebase (package.json, tsconfig, src/, DB schema, API routes, pages). Write docs/AUDIT.md with: detected stack + versions, directory inventory, existing database tables, existing API routes, existing pages/components, code-quality observations, and a numbered GAP LIST of what is missing versus the product brief. Reconcile the plan with update_architecture so entities/features match what the code actually needs. Do NOT modify any source file. Then call complete_task.`,
+    verify: ({ files }) => (files.some((f) => f.path === "docs/AUDIT.md") ? [] : ["docs/AUDIT.md must exist"]),
+  },
+  "bp-plan": {
+    statusAfter: "generating",
+    instructions: `Write docs/PLAN.md as a CHANGE plan, not a build plan: for every gap from docs/AUDIT.md, a dependency-ordered delta tagged ADD, MODIFY or DELETE with exact file paths and one-line acceptance criteria. Existing working files are only touched where a MODIFY is listed — never plan rewrites. Include a regression-risk section. Then call complete_task.`,
+    verify: ({ files }) => (files.some((f) => f.path === "docs/PLAN.md") ? [] : ["docs/PLAN.md must exist"]),
+  },
+  "bp-arch": {
+    statusAfter: "building",
+    instructions: `Write docs/ARCHITECTURE.md with two parts: AS-IS (what the imported codebase does today, from docs/AUDIT.md) and TO-BE (the architecture after the plan is applied), plus the integration points each change touches (imports, shared components, env vars). Optionally refine via update_architecture. Then call complete_task.`,
+    verify: ({ files }) => (files.some((f) => f.path === "docs/ARCHITECTURE.md") ? [] : ["docs/ARCHITECTURE.md must exist"]),
+  },
+  "bp-schema": {
+    statusAfter: "building",
+    instructions: `Sync the database schema additively. Read src/db/schema.ts (create it only if missing). For every entity in the architecture that has NO table yet: append its pgTable definition (id text primary key, timestamps, enums, foreign keys) with write_file of the FULL updated file (existing tables unchanged), call define_table for each new table, and set_env_var DATABASE_URL if absent. Never rename or drop existing columns/tables. Then call request_approval (type "schema", riskLevel "medium") showing only the additive SQL diff, and complete_task.`,
+    verify: ({ files, tables, arch }) => {
+      const out: string[] = [];
+      if (!files.some((f) => f.path === "src/db/schema.ts")) out.push("src/db/schema.ts must exist");
+      if (tables < Math.min(2, arch.entities.length)) out.push(`define_table must be called for each new entity (${tables}/${arch.entities.length} registered)`);
+      return out;
+    },
+    contextFiles: ["docs/AUDIT.md", "src/db/schema.ts"],
+  },
+  "bp-api": {
+    statusAfter: "building",
+    instructions: `Extend the REST API for resources that do NOT already have routes. list_files under src/app/api first; skip any resource whose route file exists. For each missing resource write src/lib/validators/<entity>.ts, src/app/api/<plural>/route.ts and src/app/api/<plural>/[id]/route.ts following the SAME conventions as the existing routes (read one existing route to copy auth, error shape and pagination style). Do not modify existing handlers. Then complete_task.`,
+    verify: ({ files, arch }) => {
+      const routes = files.filter((f) => /^src\/app\/api\/.+\/route\.ts$/.test(f.path)).map((f) => f.path);
+      const missing = arch.entities.filter((e) => e.name !== "User" && !routes.some((r) => r.includes(`/${e.slug}/`)));
+      return missing.length === 0 ? [] : [`missing API routes for: ${missing.map((e) => e.plural).join(", ")}`];
+    },
+    contextFiles: ["src/db/schema.ts"],
+  },
+  "bp-ui": {
+    statusAfter: "building",
+    instructions: `Add the missing UI: read the existing navigation/layout, then create list + form pages only for resources without a page, matching the current component style and data-fetching pattern. Wire new links into the existing navigation with a minimal MODIFY of the nav file — do not restructure the app shell. Then complete_task.`,
+    verify: ({ files, arch }) => {
+      const pages = files.filter((f) => f.path.startsWith("src/app/") && f.path.endsWith("page.tsx")).map((f) => f.path);
+      const missing = arch.entities.filter((e) => e.name !== "User" && !pages.some((p) => p.includes(e.slug)));
+      return missing.length === 0 ? [] : [`missing pages for: ${missing.map((e) => e.plural).join(", ")} (found ${pages.length} pages)`];
+    },
+    contextFiles: ["docs/PLAN.md"],
+  },
+  "bp-tests": {
+    statusAfter: "testing",
+    instructions: `Write tests ONLY for the added/changed behaviour listed in docs/PLAN.md (validators, new route handlers, new pages' data layer). Reuse the repo's existing test setup; if no vitest config exists, add a minimal one. Run "npm test" via run_command and fix failures caused by your changes. Then complete_task.`,
+    verify: ({ files }) => (files.some((f) => /\.(test|spec)\.[mt]s[x]?$/.test(f.path)) ? [] : ["at least one test file must exist"]),
+    contextFiles: ["docs/PLAN.md"],
+  },
+  "bp-ship": {
+    statusAfter: "completed",
+    instructions: `Write docs/CHANGES.md: the full delta versus the imported baseline — files added, files modified (what changed and why), new tables, new endpoints, new pages, plus rollback notes (revert = delete added files, restore modified ones). Then call request_approval with type "deploy", riskLevel "high", summary and affected systems from the change report, and complete_task.`,
+    verify: ({ files }) => (files.some((f) => f.path === "docs/CHANGES.md") ? [] : ["docs/CHANGES.md must exist"]),
+  },
 };
 
 export function systemPromptFor(ctx: StepContext, modelId: string): string {
   const a = AGENTS[ctx.role];
+  const brownfield = ctx.project.mode === "brownfield";
   return [
-    `You are ${a.name} (${a.emoji}), a specialist agent in Forge — an autonomous multi-agent system that generates production-grade full-stack applications.`,
+    `You are ${a.name} (${a.emoji}), a specialist agent in Forge — an autonomous multi-agent system that generates production-grade full-stack applications${brownfield ? " and extends existing codebases" : ""}.`,
     `Role: ${a.tagline}. ${a.description}`,
     `You are running as model ${modelId}. You work inside a virtual workspace via tools; you cannot access the network.`,
+    brownfield ? `This is a BROWNFIELD task: the workspace contains the user's real, pre-existing code. Treat every file you did not create as precious — read before you change, keep changes additive and minimal, and match the existing code style exactly. Never delete or rewrite files outside your task's change list.` : null,
     ``,
     `# Engineering standards`,
     `- Stack: Next.js 15 App Router, TypeScript strict, Tailwind CSS v4, Drizzle ORM + PostgreSQL, Zod validation, vitest.`,
@@ -522,7 +583,7 @@ export function systemPromptFor(ctx: StepContext, modelId: string): string {
     `- Prefer small, focused files. Use server components by default; add "use client" only when hooks/events are needed.`,
     `- Handle errors explicitly; validate all external input with Zod; never leak secrets.`,
     `- When done, call complete_task exactly once. Do not narrate; act with tools.`,
-  ].join("\n");
+  ].filter((s): s is string => s !== null).join("\n");
 }
 
 export function userPromptFor(ctx: StepContext, spec: StepSpec, extra: { fileTree: string[]; contextFiles: Array<{ path: string; content: string }>; feedback?: string; priorSummaries: string[] }): string {

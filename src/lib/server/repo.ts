@@ -51,6 +51,27 @@ export function buildStaticPlan(): PlanStep[] {
   return steps.map((s, index) => ({ ...s, index }));
 }
 
+/** Extend-an-existing-codebase plan: audit → patch. Never re-scaffolds over user files. */
+export function buildBrownfieldPlan(arch: Architecture): PlanStep[] {
+  const n = arch.entities.length;
+  const steps: Omit<PlanStep, "index">[] = [
+    { agent: "orchestrator", key: "bp-audit", title: "Audit the imported codebase", description: "Inventory stack, modules, tables, routes and pages that already exist; reconcile the architecture with reality." },
+    { agent: "orchestrator", key: "bp-plan", title: "Create the change plan", description: "Dependency-ordered ADD/MODIFY/DELETE deltas between the existing code and the brief — no rewrites of working files." },
+    { agent: "architect", key: "bp-arch", title: "Document current vs target architecture", description: "docs/ARCHITECTURE.md as-is / to-be with the integration points the changes touch." },
+    { agent: "database", key: "bp-schema", title: "Sync the database schema", description: `Add the ${n} missing entities as additive migrations only; keep existing tables and columns intact.` },
+    { agent: "backend", key: "bp-api", title: "Extend the REST API", description: "Generate handlers and validators only for resources that do not exist yet, matching the repo's conventions." },
+    { agent: "frontend", key: "bp-ui", title: "Extend the UI", description: "Add missing pages and wire them into existing navigation with minimal edits." },
+    { agent: "testing", key: "bp-tests", title: "Test the changes", description: "New tests covering added/changed behaviour; run the existing suite to catch regressions." },
+    { agent: "testing", key: "run-tests", title: "Run quality gate", description: "Static analysis, typecheck, lint and tests — with automatic repair loop." },
+    { agent: "devops", key: "bp-ship", title: "Change report & release", description: "docs/CHANGES.md diffing against the imported baseline, then deploy behind an approval gate." },
+  ];
+  return steps.map((s, index) => ({ ...s, index }));
+}
+
+export function planFor(mode: string, arch: Architecture): PlanStep[] {
+  return mode === "static" ? buildStaticPlan() : mode === "brownfield" ? buildBrownfieldPlan(arch) : buildPlan(arch);
+}
+
 // ─── Brownfield import ──────────────────────────────────────────────────────
 
 /** Bulk-import existing files as user-owned file nodes. ponytail: ≤500 files / ≤400KB each — add tar streaming if real repos need more. */
@@ -90,7 +111,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     arch.overview = input.prompt.trim().replace(/\s+/g, " ");
     arch.features = [];
   }
-  const plan = input.mode === "static" ? buildStaticPlan() : buildPlan(arch);
+  const plan = planFor(input.mode ?? "greenfield", arch);
   const now = new Date();
 
   return db.transaction(async (tx) => {
@@ -145,7 +166,7 @@ export async function resetProject(pid: string): Promise<Project | undefined> {
   const p = await getProject(pid);
   if (!p) return undefined;
   const arch = p.architecture ?? buildArchitecture(p.prompt, inferDomain(p.prompt));
-  const plan = p.mode === "static" ? buildStaticPlan() : buildPlan(arch);
+  const plan = planFor(p.mode, arch);
   return db.transaction(async (tx) => {
     // Keep user-owned files (imported repos, manual editor edits); drop everything agents generated.
     await tx.delete(fileNodes).where(and(
